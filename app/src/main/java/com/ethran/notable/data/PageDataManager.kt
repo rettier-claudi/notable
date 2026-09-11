@@ -1061,6 +1061,8 @@ class PageDataManager @Inject constructor(
     // the per-page dirty signal (for incremental upload); the notebook timestamp drives the
     // per-notebook sync Upload/Download decision. Both advance together on any stroke/image edit.
     private suspend fun bumpEditTimestamps() {
+        // Writing counts as activity even when the raw pen path bypasses touch dispatch.
+        com.ethran.notable.sync.ActivityPulse.touch()
         val pageId = pageFromDb?.id
         if (!pageId.isNullOrEmpty()) {
             appRepository.pageRepository.touchUpdatedAt(pageId)

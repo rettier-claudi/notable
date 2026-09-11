@@ -9,6 +9,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -82,6 +84,19 @@ class SyncScheduler @Inject constructor(
     fun cancelRunningSync() {
         workManager.cancelAllWorkByTag(SyncWorker.SYNC_WORK_TAG)
     }
+
+    /**
+     * Whether an immediate sync for [request] is enqueued or running. The engine's own
+     * [SyncProgressReporter] only turns "Syncing" once the orchestrator holds its mutex, so between
+     * the tap and that moment every button looked idle -- a tap right after app start (while the
+     * start-up sync still occupies the unique work) was dropped by the KEEP policy with no visible
+     * effect, which read as "the button does nothing". Watching the unique work closes that gap.
+     * Deliberately not tag-based: periodic work sits in ENQUEUED between runs and would always
+     * report active.
+     */
+    fun immediateSyncActive(request: SyncRequest = SyncRequest.SyncAll): Flow<Boolean> =
+        workManager.getWorkInfosForUniqueWorkFlow(uniqueNameFor(request))
+            .map { infos -> infos.any { !it.state.isFinished } }
 
     /** Unique work name of an immediate sync; observe it to learn when the request has finished. */
     fun uniqueNameFor(request: SyncRequest): String =

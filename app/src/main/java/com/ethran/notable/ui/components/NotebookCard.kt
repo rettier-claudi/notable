@@ -106,7 +106,7 @@ fun NotebookCard(
 }
 
 /** Icon for the corner badge, or null when there is nothing worth showing. */
-private fun SyncBadge.iconOrNull(): ImageVector? = when (this) {
+internal fun SyncBadge.iconOrNull(): ImageVector? = when (this) {
     SyncBadge.SYNCED -> Icons.Default.CloudDone
     SyncBadge.NOT_SYNCED -> Icons.Default.CloudOff
     SyncBadge.SCHEDULED -> Icons.Default.Schedule

@@ -4,9 +4,10 @@ import android.content.Context
 import com.ethran.notable.data.db.KvProxy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.shipbook.shipbooksdk.Log
-import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -93,31 +94,52 @@ class ForegroundSyncController @Inject constructor(
     }
 
     /**
-     * Foreground poll: every [SyncSettings.foregroundSyncIntervalMinutes] minutes while the caller's
-     * scope is alive. Re-reads the settings each round so changes apply without a restart; a
-     * value of 0 disables it (checked again every minute).
+     * Activity-driven foreground syncing, in place of a periodic poll. Two triggers, both derived
+     * from [ActivityPulse]:
+     *
+     *  - **settle**: [SyncSettings.idleSyncMinutes] after the last activity, sync once. While the
+     *    user writes, nothing is sent; when they stop, the result goes up.
+     *  - **return**: activity after at least [SyncSettings.returnSyncMinutes] of quiet syncs
+     *    immediately — the server may have moved on while the tablet lay untouched.
+     *
+     * Runs only while the caller's scope lives (the activity is RESUMED), so an idle device costs
+     * nothing; the WorkManager job stays the background fallback. Either threshold at 0 disables
+     * that trigger.
      */
-    suspend fun pollWhileResumed() {
-        while (currentCoroutineContext().isActive) {
+    suspend fun trackActivityWhileResumed(): Unit = coroutineScope {
+        var settleJob: Job? = null
+        // Entering the foreground counts as activity, so a long pause before the *next* touch does
+        // not immediately re-trigger the return sync that onAppResumed already covered.
+        var lastActivityAt = System.currentTimeMillis()
+
+        ActivityPulse.pulses.collect { at ->
+            val quietFor = at - lastActivityAt
+            lastActivityAt = at
             val settings = try {
                 kvProxy.getSyncSettings()
             } catch (e: Exception) {
-                delay(SETTINGS_RECHECK_MS)
-                continue
+                return@collect
             }
-            val minutes = settings.foregroundSyncIntervalMinutes
-            if (!settings.syncEnabled || minutes <= 0) {
-                delay(SETTINGS_RECHECK_MS)
-                continue
+            if (!settings.syncEnabled) return@collect
+
+            val returnAfter = settings.returnSyncMinutes
+            if (returnAfter > 0 && quietFor >= returnAfter * 60_000L) {
+                requestSync("back after ${quietFor / 60_000} min idle")
             }
-            delay(minutes * 60_000L)
-            requestSync("foreground poll")
+
+            val settleAfter = settings.idleSyncMinutes
+            settleJob?.cancel()
+            if (settleAfter > 0) {
+                settleJob = launch {
+                    delay(settleAfter * 60_000L)
+                    requestSync("idle for $settleAfter min")
+                }
+            }
         }
     }
 
     companion object {
         private const val TAG = "ForegroundSync"
         const val MIN_GAP_MS = 30_000L
-        private const val SETTINGS_RECHECK_MS = 60_000L
     }
 }

@@ -96,9 +96,8 @@ class NotebookSyncService @Inject constructor(
         log.i(TAG, "Applying remote deletions...")
         val tombstonesPath = SyncPaths.tombstonesDir()
 
-        val tombstonesExist = client.exists(tombstonesPath).onFailure { return AppResult.Error(it) }
-        if (!tombstonesExist) return AppResult.Success(emptySet())
-
+        // No existence HEAD first: listCollectionWithMetadata reports a missing collection as an
+        // empty list, and on nginx the HEAD cost two round trips (301 to the trailing-slash form).
         return client.listCollectionWithMetadata(tombstonesPath).flatMap { tombstones ->
             val tombstonedIds = tombstones.map { it.name }.toSet()
             val errors = ErrorAccumulator()
@@ -190,13 +189,11 @@ class NotebookSyncService @Inject constructor(
     suspend fun garbageCollectOrphanedRemotes(
         client: WebDAVClient,
         localNotebookIds: Set<String>,
-        maxAgeDays: Long
+        maxAgeDays: Long,
+        /** The run's shared notebook listing; re-listing here duplicated a PROPFIND every round. */
+        entries: List<RemoteEntry>,
     ) {
         val cutoff = Date(System.currentTimeMillis() - maxAgeDays * 86_400_000L)
-        val entries = client.listCollectionWithMetadata(SyncPaths.notebooksDir()).getOrElse {
-            log.w(TAG, "Orphan GC: listing notebooks failed: ${it.userMessage}")
-            return
-        }
         for (entry in entries) {
             val id = entry.name
             // Owned locally -> the normal sync re-uploads it to self-heal; never GC one we still have.

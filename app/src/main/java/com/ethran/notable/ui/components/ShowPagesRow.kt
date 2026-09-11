@@ -1,5 +1,6 @@
 package com.ethran.notable.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,8 +10,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
@@ -29,6 +32,7 @@ import com.ethran.notable.data.AppRepository
 import com.ethran.notable.data.db.Page
 import com.ethran.notable.editor.ui.PageMenu
 import com.ethran.notable.editor.utils.autoEInkAnimationOnScroll
+import com.ethran.notable.sync.SyncBadge
 import com.ethran.notable.ui.noRippleClickable
 import com.onyx.android.sdk.extension.isNullOrEmpty
 import compose.icons.FeatherIcons
@@ -46,6 +50,7 @@ fun ShowPagesRow(
     showAddQuickPage: Boolean = false,
     onCreateNewQuickPage: () -> Unit = {},
     onPreviewMissing: (String) -> Unit = {},
+    syncBadges: Map<String, SyncBadge> = emptyMap(),
 ) {
 
     if (title != null) {
@@ -107,6 +112,19 @@ fun ShowPagesRow(
                         pageId = pageId,
                         onPreviewMissing = onPreviewMissing
                     )
+                    syncBadges[pageId]?.iconOrNull()?.let { icon ->
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Sync status: ${syncBadges[pageId]?.name}",
+                            tint = Color.Black,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .background(Color.White, CircleShape)
+                                .padding(2.dp)
+                                .size(16.dp)
+                        )
+                    }
                     if (isPageSelected) PageMenu(
                         appRepository = appRepository,
                         pageId = pageId, canDelete = true, onClose = { isPageSelected = false })

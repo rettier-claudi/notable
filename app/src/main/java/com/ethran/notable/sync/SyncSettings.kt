@@ -19,11 +19,16 @@ data class SyncSettings(
     /** Run a full sync when the app comes back to the foreground (device wake-up, app switch). */
     val syncOnResume: Boolean = true,
     /**
-     * While the app is in the foreground, sync every N minutes (0 = off). Cheap when nothing
-     * changed (one directory listing plus conditional manifest GETs) and it never runs while the
-     * device sleeps; the >= 15 min WorkManager job stays the background fallback.
+     * Sync once after this many minutes without any activity in the app (0 = off). Replaces a
+     * periodic poll: while writing, no sync is expected; once the user stops, one sync pushes the
+     * result. Nothing runs while the device sleeps.
      */
-    val foregroundSyncIntervalMinutes: Int = 2,
+    val idleSyncMinutes: Int = 2,
+    /**
+     * When activity resumes after at least this many minutes of quiet, sync once (0 = off) — the
+     * server may have changed while the tablet lay idle.
+     */
+    val returnSyncMinutes: Int = 10,
     /** Run a full sync when the app leaves the screen (home button, app switch), so nothing is missed. */
     val syncOnAppClose: Boolean = true,
     /**

@@ -102,6 +102,9 @@ data class ToolbarUiState(
     val syncEnabled: Boolean = false,
     val syncWebhookConfigured: Boolean = false,
     val syncState: com.ethran.notable.sync.SyncState = com.ethran.notable.sync.SyncState.Idle,
+    /** A sync is enqueued or running. True before the engine reports Syncing, so a tap that
+     * WorkManager folds into an in-flight run still reads as "busy" instead of "nothing happened". */
+    val syncBusy: Boolean = false,
     /** A "sync and notify" is running: sync in flight or webhook POST pending. */
     val syncNotifyPending: Boolean = false,
 ) {
@@ -228,6 +231,11 @@ class EditorViewModel @Inject constructor(
                 _toolbarState.update { it.copy(syncNotifyPending = pending) }
             }
         }
+        viewModelScope.launch {
+            syncScheduler.immediateSyncActive().collect { active ->
+                _toolbarState.update { it.copy(syncBusy = active) }
+            }
+        }
         // The page on screen was replaced by a server download. Right after start/wake-up
         // (the resume sync) the user has not drawn yet: reload silently, so the wake-up sync
         // never turns into a conflict. Later, ask -- a silent reload would discard the strokes
@@ -237,11 +245,10 @@ class EditorViewModel @Inject constructor(
                 if (event !is com.ethran.notable.data.events.AppEvent.PageDownloaded) return@collect
                 if (!editorActive || event.pageId != currentPageId) return@collect
                 if (com.ethran.notable.utils.AppResumeClock.millisSinceResume() <= RELOAD_AFTER_RESUME_MS) {
+                    // Silent on purpose: the user has not drawn yet, and a snack here would be
+                    // one more e-ink repaint for something that needs no decision.
                     log.i("Page ${event.pageId} downloaded shortly after resume - reloading canvas")
                     sendCanvasCommand(CanvasCommand.RefreshCanvas)
-                    snackDispatcher.showOrUpdateSnack(
-                        SnackConf(text = "Page updated from server", duration = 2000)
-                    )
                 } else {
                     snackDispatcher.showOrUpdateSnack(
                         SnackConf(

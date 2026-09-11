@@ -76,7 +76,41 @@ class NotebookSyncStatusStore @Inject constructor(
         }
     }
 
+    /**
+     * Per-quick-page badge. Quick pages have no manifest and no conflict state: a page is either
+     * waiting to be uploaded (never uploaded, or edited since), in flight, or up to date. Same
+     * shape as [badges] so the library renders both with one icon mapping.
+     */
+    val quickPageBadges: Flow<Map<String, SyncBadge>> = combine(
+        appRepository.pageRepository.getAllSinglePagesFlow(),
+        appRepository.pageSyncStateRepository
+            .getByNotebookFlow(QuickPageSyncService.QUICK_PAGES_NOTEBOOK_ID),
+        reporter.state,
+    ) { pages, rows, syncState ->
+        quickPageBadgesFor(pages, rows, syncState is SyncState.Syncing)
+    }
+
     companion object {
         private const val TOLERANCE_MS = 1000L
+    }
+}
+
+/** Pure badge derivation for quick pages, so the rules are unit-testable without Room. */
+internal fun quickPageBadgesFor(
+    pages: List<com.ethran.notable.data.db.Page>,
+    rows: List<com.ethran.notable.data.db.PageSyncState>,
+    syncing: Boolean,
+): Map<String, SyncBadge> {
+    val byId = rows.associateBy { it.pageId }
+    return pages.associate { page ->
+        val row = byId[page.id]
+        val pending = row == null ||
+            page.updatedAt.time - row.syncedLocalUpdatedAt.time > QuickPageSyncService.TOLERANCE_MS
+        val badge = when {
+            !pending -> SyncBadge.SYNCED
+            syncing -> SyncBadge.SYNCING
+            else -> SyncBadge.NOT_SYNCED
+        }
+        page.id to badge
     }
 }

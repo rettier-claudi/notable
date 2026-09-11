@@ -284,9 +284,10 @@
     <string name="toolbar_element_divider">Separator</string>
 
     <string name="sync_on_resume_label">Synchronizuj po powrocie aplikacji na pierwszy plan (wybudzenie, przełączenie aplikacji)</string>
-    <string name="sync_foreground_interval_label">Synchronizuj podczas używania co</string>
+    <string name="sync_idle_minutes_label">Synchronizuj po bezczynności</string>
+    <string name="sync_return_minutes_label">Synchronizuj po powrocie po</string>
     <string name="sync_foreground_interval_off">Wył.</string>
-    <string name="sync_foreground_interval_hint">Działa tylko, gdy Notable jest na ekranie — nic podczas snu urządzenia. Runda bez zmian to jedno listowanie katalogu i kilka warunkowych zapytań.</string>
+    <string name="sync_activity_hint">Bez cyklicznego odpytywania: jedna synchronizacja po zakończeniu pracy i jedna po ponownym sięgnięciu po tablet po dłuższej przerwie. Obie tylko, gdy Notable jest na ekranie. Ustaw 0, aby wyłączyć.</string>
     <string name="home_sync_syncing">Synchronizacja…</string>
     <string name="home_sync_failed">Synchronizacja nieudana — dotknij, aby ponowić</string>
     <string name="home_sync_synced_at">Zsynchronizowano %1$s</string>

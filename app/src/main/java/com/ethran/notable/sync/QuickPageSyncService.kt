@@ -38,18 +38,30 @@ class QuickPageSyncService @Inject constructor(
 ) {
     private val log = SyncLogger
 
-    suspend fun sync(client: WebDAVClient, uploadOnly: Boolean): AppResult<QuickPageSyncSummary, DomainError> {
+    suspend fun sync(
+        client: WebDAVClient,
+        uploadOnly: Boolean,
+        /** From the preflight's root listing; the directory is created lazily on first upload. */
+        dirExists: Boolean = false,
+    ): AppResult<QuickPageSyncSummary, DomainError> {
         val dir = SyncPaths.quickPagesDir()
-        client.createCollection(dir).onError { return AppResult.Error(it) }
-        // A failed listing must not be mistaken for "the server deleted everything".
-        val remoteNames = client.listNames(dir).getOrElse { error ->
-            log.w(TAG, "Quick pages: listing failed, skipping this round: ${error.userMessage}")
-            return AppResult.Error(error)
-        }.toSet()
-
         val localPages = appRepository.pageRepository.getAllSinglePages()
         val rows = appRepository.pageSyncStateRepository.getByNotebook(QUICK_PAGES_NOTEBOOK_ID)
             .associateBy { it.pageId }
+        // Nothing here and nothing ever uploaded: no request at all. Without a row, an absent
+        // remote file means nothing, so there is also nothing the listing could tell us.
+        if (localPages.isEmpty() && rows.isEmpty()) {
+            return AppResult.Success(QuickPageSyncSummary(0, 0, 0))
+        }
+        // A failed listing must not be mistaken for "the server deleted everything".
+        val remoteNames = if (dirExists) {
+            client.listNames(dir).getOrElse { error ->
+                log.w(TAG, "Quick pages: listing failed, skipping this round: ${error.userMessage}")
+                return AppResult.Error(error)
+            }.toSet()
+        } else {
+            emptySet()
+        }
         val plan = planQuickPageSync(localPages, rows, remoteNames)
         log.i(
             TAG,
@@ -60,6 +72,9 @@ class QuickPageSyncService @Inject constructor(
 
         val errors = ErrorAccumulator()
         var uploaded = 0
+        if (plan.upload.isNotEmpty() && !dirExists) {
+            client.createCollection(dir).onError { return AppResult.Error(it) }
+        }
         for (page in plan.upload) {
             uploadQuickPage(page, client).onSuccess {
                 uploaded++
@@ -107,8 +122,12 @@ class QuickPageSyncService @Inject constructor(
     }
 
     private suspend fun uploadQuickPage(page: Page, client: WebDAVClient): AppResult<Unit, DomainError> {
-        val data = appRepository.pageRepository.getWithDataById(page.id)
-            ?: return AppResult.Error(DomainError.DatabaseError("Page data not found: ${page.id}"))
+        // A page row that disappeared between planning and upload (deleted while the sync ran) is
+        // not an error -- skip it silently rather than failing the whole run with "not found".
+        val data = appRepository.pageRepository.getWithDataById(page.id) ?: run {
+            log.i(TAG, "Quick page ${page.id} vanished before upload, skipping")
+            return AppResult.Success(Unit)
+        }
         val json = NotebookSerializer.serializePage(page, data.strokes, data.images)
         client.putFile(SyncPaths.quickPageFile(page.id), json.toByteArray(), "application/json")
             .onError { return AppResult.Error(it) }

@@ -87,6 +87,9 @@ interface PageDao {
     @Query("SELECT * FROM page WHERE notebookId is null")
     suspend fun getAllSinglePages(): List<Page>
 
+    @Query("SELECT * FROM page WHERE notebookId is null")
+    fun getAllSinglePagesFlow(): kotlinx.coroutines.flow.Flow<List<Page>>
+
     @Insert
     suspend fun create(page: Page): Long
 
@@ -151,6 +154,8 @@ class PageRepository @Inject constructor(
     }
 
     suspend fun getAllSinglePages(): List<Page> = db.getAllSinglePages()
+
+    fun getAllSinglePagesFlow(): kotlinx.coroutines.flow.Flow<List<Page>> = db.getAllSinglePagesFlow()
 
     suspend fun update(page: Page) {
         return db.update(page)

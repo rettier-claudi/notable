@@ -42,7 +42,7 @@ class SyncWorkUiBridge @Inject constructor(
                 val key = "${info.id}:${info.state.name}"
                 if (handledIds.add(key)) {
                     trimHandledIds()
-                    emit(buildSnackEvent(info))
+                    buildSnackEvent(info)?.let { emit(it) }
                 }
             }
         }
@@ -60,21 +60,20 @@ class SyncWorkUiBridge @Inject constructor(
         }
     }
 
-    private fun buildSnackEvent(info: WorkInfo): SnackEvent {
+    /**
+     * Null for every ordinary outcome. On e-ink each snack is a visible repaint that leaves
+     * ghosting behind, and a sync that simply worked is already reported by the library chip and
+     * the toolbar button — so only a real failure is worth interrupting for. Success, "skipped",
+     * "already running" and user-initiated cancellation are all silent.
+     */
+    private fun buildSnackEvent(info: WorkInfo): SnackEvent? {
         val output = info.outputData
-        val success = output.getBoolean(SyncWorker.OUTPUT_KEY_SUCCESS, false)
-        val skipped = output.getBoolean(SyncWorker.OUTPUT_KEY_SKIPPED, false)
         val errorMsg = output.getString(SyncWorker.OUTPUT_KEY_ERROR)
 
         return when {
-            skipped -> SnackEvent(R.string.sync_skipped)
-            success -> SnackEvent(R.string.sync_completed_successfully)
-            info.state == WorkInfo.State.CANCELLED -> SnackEvent(R.string.sync_cancelled)
-            // "Sync already in progress" is informational (another run is handling it), not a
-            // failure -- e.g. a manual Sync Now landing while a periodic sync runs (8i-1 / 9c).
-            errorMsg == SYNC_IN_PROGRESS_ERROR -> SnackEvent(R.string.sync_already_running)
-            errorMsg != null -> SnackEvent(R.string.sync_failed_message, errorMsg, isError = true)
-            else -> SnackEvent(R.string.sync_finished)
+            errorMsg == null || errorMsg == SYNC_IN_PROGRESS_ERROR -> null
+            info.state == WorkInfo.State.CANCELLED -> null
+            else -> SnackEvent(R.string.sync_failed_message, errorMsg, isError = true)
         }
     }
 }

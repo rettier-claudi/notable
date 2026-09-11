@@ -379,14 +379,18 @@ private fun SyncBehaviorSection(
                 value = state.syncSettings.syncOnResume,
                 onToggle = { onUpdate(state.syncSettings.copy(syncOnResume = it), true) }
             )
-            ForegroundSyncIntervalSelector(
-                intervalMinutes = state.syncSettings.foregroundSyncIntervalMinutes,
-                onIntervalChanged = {
-                    onUpdate(state.syncSettings.copy(foregroundSyncIntervalMinutes = it), true)
-                }
+            MinutesSelector(
+                label = stringResource(R.string.sync_idle_minutes_label),
+                minutes = state.syncSettings.idleSyncMinutes,
+                onChanged = { onUpdate(state.syncSettings.copy(idleSyncMinutes = it), true) }
+            )
+            MinutesSelector(
+                label = stringResource(R.string.sync_return_minutes_label),
+                minutes = state.syncSettings.returnSyncMinutes,
+                onChanged = { onUpdate(state.syncSettings.copy(returnSyncMinutes = it), true) }
             )
             Text(
-                text = stringResource(R.string.sync_foreground_interval_hint),
+                text = stringResource(R.string.sync_activity_hint),
                 style = MaterialTheme.typography.caption,
                 color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
@@ -845,16 +849,19 @@ private fun SyncIntervalSelector(
     }
 }
 
-/** Steps for the foreground poll; 0 = off. */
-private val FOREGROUND_INTERVAL_STEPS = listOf(0, 1, 2, 5, 10, 15, 30)
+/** Steps for the activity-driven sync thresholds; 0 = off. */
+private val MINUTE_STEPS = listOf(0, 1, 2, 5, 10, 15, 30, 60)
 
 @Composable
-private fun ForegroundSyncIntervalSelector(
-    intervalMinutes: Int,
-    onIntervalChanged: (Int) -> Unit,
+private fun MinutesSelector(
+    label: String,
+    minutes: Int,
+    onChanged: (Int) -> Unit,
 ) {
-    val index = FOREGROUND_INTERVAL_STEPS.indexOfFirst { it >= intervalMinutes }
-        .let { if (it < 0) FOREGROUND_INTERVAL_STEPS.lastIndex else it }
+    val intervalMinutes = minutes
+    val onIntervalChanged = onChanged
+    val index = MINUTE_STEPS.indexOfFirst { it >= intervalMinutes }
+        .let { if (it < 0) MINUTE_STEPS.lastIndex else it }
 
     Row(
         modifier = Modifier
@@ -864,7 +871,7 @@ private fun ForegroundSyncIntervalSelector(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = stringResource(R.string.sync_foreground_interval_label),
+            text = label,
             style = MaterialTheme.typography.body2,
             color = MaterialTheme.colors.onSurface,
             modifier = Modifier.weight(1f)
@@ -872,7 +879,7 @@ private fun ForegroundSyncIntervalSelector(
 
         EInkActionButton(
             text = "-",
-            onClick = { onIntervalChanged(FOREGROUND_INTERVAL_STEPS[index - 1]) },
+            onClick = { onIntervalChanged(MINUTE_STEPS[index - 1]) },
             enabled = index > 0,
             isSecondary = true
         )
@@ -887,8 +894,8 @@ private fun ForegroundSyncIntervalSelector(
 
         EInkActionButton(
             text = "+",
-            onClick = { onIntervalChanged(FOREGROUND_INTERVAL_STEPS[index + 1]) },
-            enabled = index < FOREGROUND_INTERVAL_STEPS.lastIndex,
+            onClick = { onIntervalChanged(MINUTE_STEPS[index + 1]) },
+            enabled = index < MINUTE_STEPS.lastIndex,
             isSecondary = true
         )
     }

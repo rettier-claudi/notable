@@ -50,6 +50,9 @@ interface PageSyncStateDao {
     @Query("SELECT * FROM page_sync_state WHERE notebookId = :notebookId")
     suspend fun getByNotebook(notebookId: String): List<PageSyncState>
 
+    @Query("SELECT * FROM page_sync_state WHERE notebookId = :notebookId")
+    fun getByNotebookFlow(notebookId: String): kotlinx.coroutines.flow.Flow<List<PageSyncState>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(rows: List<PageSyncState>)
 
@@ -64,6 +67,9 @@ class PageSyncStateRepository @Inject constructor(
     private val dao: PageSyncStateDao
 ) {
     suspend fun getByNotebook(notebookId: String): List<PageSyncState> = dao.getByNotebook(notebookId)
+
+    fun getByNotebookFlow(notebookId: String): kotlinx.coroutines.flow.Flow<List<PageSyncState>> =
+        dao.getByNotebookFlow(notebookId)
     suspend fun upsertAll(rows: List<PageSyncState>) {
         if (rows.isNotEmpty()) dao.upsertAll(rows)
     }

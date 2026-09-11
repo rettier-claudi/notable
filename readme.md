@@ -70,8 +70,24 @@ the `upstream` remote and merged in as it moves.
 - **Sync when the app comes back to the foreground** — *Settings → Sync*: a full sync on every
   resume (device wake-up, app switch), rate-limited to one request per 30 s and skipped offline.
   Previously only a fresh app start synced, so a tablet that merely woke up never pulled changes.
-- **Sync while in use every N minutes** (default 2, Off/1/2/5/10/15/30): a foreground poll that
-  only runs while Notable is on screen. The ≥ 15 min WorkManager job stays the background fallback.
+- **Activity-driven syncing instead of a poll** (*Settings → Sync*): one sync a configurable
+  number of minutes after the last activity in the app (default 2), and one when activity resumes
+  after a longer pause (default 10 min). Nothing periodic runs in the foreground; while you write,
+  no sync is expected, and the toolbar button covers the "now, please" case. Activity means any
+  touch/key the window sees plus every committed stroke (Onyx's raw pen path bypasses touch
+  dispatch, so strokes report separately). The ≥ 15 min WorkManager job stays the background
+  fallback.
+- **Fewer requests per round.** An idle round with four notebooks went from 14 requests to 8: the
+  preflight's root listing now answers the `folders.json` / `deletions` / `quickpages` existence
+  questions (three HEADs, one of them a 301 + retry on nginx, and a `MKCOL` per round), the orphan
+  collector reuses the run's notebook listing instead of repeating the `PROPFIND`, and the
+  quick-page round makes no request at all when there is nothing to upload and nothing was ever
+  uploaded. What remains is the root probe, two listings, the tombstone listing and one conditional
+  manifest GET per notebook.
+- **No snack for a sync that simply worked.** Success, "skipped", "already running" and
+  cancellation are silent — each snack is an e-ink repaint that leaves ghosting, and the status is
+  already on the library chip and the toolbar button. Failures still interrupt.
+- **Quick pages carry the same sync badge as notebooks** in the library.
 - **Sync indicator and button on the home screen** (top right, next to settings): state of the
   engine, time of the last successful sync, count of notebooks with unsynced edits or conflicts.
   Tap = "Sync now" / retry.

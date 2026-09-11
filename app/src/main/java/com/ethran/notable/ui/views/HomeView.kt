@@ -224,7 +224,8 @@ fun LibraryContent(
                 title = stringResource(R.string.home_quick_pages), onSelectPage = goToPage,
                 showAddQuickPage = true,
                 onCreateNewQuickPage = onCreateNewQuickPage,
-                onPreviewMissing = onPreviewMissing
+                onPreviewMissing = onPreviewMissing,
+                syncBadges = uiState.quickPageBadges,
             )
 
             Spacer(Modifier.height(10.dp))
@@ -268,8 +269,9 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
         java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(it))
     }
 
+    val busy = status.busy || state is SyncState.Syncing
     val (icon: ImageVector, text: String) = when {
-        state is SyncState.Syncing -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_syncing)
+        busy -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_syncing)
         state is SyncState.Error -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_failed)
         status.conflictCount > 0 -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_conflict)
         status.pendingCount > 0 -> FeatherIcons.RefreshCw to
@@ -277,15 +279,13 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
         timeLabel != null -> FeatherIcons.Check to stringResource(R.string.home_sync_synced_at, timeLabel)
         else -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_never)
     }
-    val syncing = state is SyncState.Syncing
-
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
             .border(0.5.dp, Color.Black)
             .padding(horizontal = 10.dp, vertical = 6.dp)
-            .noRippleClickable(onClick = { if (!syncing) onSyncNow() })
+            .noRippleClickable(onClick = { if (!busy) onSyncNow() })
     ) {
         Icon(
             imageVector = icon,

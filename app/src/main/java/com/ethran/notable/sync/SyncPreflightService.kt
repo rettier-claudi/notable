@@ -64,7 +64,7 @@ class SyncPreflightService @Inject constructor(
      * is never mistaken for an absent directory. When the `Date` header is missing or unparseable the
      * dedicated [checkClockSkew] HEAD is issued as a fallback, so skew is never silently skipped.
      */
-    fun ensureServerReady(client: WebDAVClient): AppResult<Unit, DomainError> {
+    fun ensureServerReady(client: WebDAVClient): AppResult<Set<String>, DomainError> {
         val probe = client.probeRoot(SyncPaths.rootDir()).onFailure { return AppResult.Error(it) }
 
         checkClockSkew(probe, client).onFailure { return AppResult.Error(it) }
@@ -76,18 +76,25 @@ class SyncPreflightService @Inject constructor(
             for (dir in directories) {
                 client.createCollection(dir).onError { return AppResult.Error(it) }
             }
-            return AppResult.Success(Unit)
+            // Freshly created tree: the two child directories exist, nothing else does.
+            return AppResult.Success(
+                directories.drop(1).mapTo(mutableSetOf()) { it.trimEnd('/').substringAfterLast('/') }
+            )
         }
 
+        val created = mutableSetOf<String>()
         for (dir in listOf(SyncPaths.notebooksDir(), SyncPaths.tombstonesDir())) {
             // SyncPaths currently has no trailing slash, but normalize here so changing that path
             // spelling cannot silently turn every child name into an empty string.
             val childName = dir.trimEnd('/').substringAfterLast('/')
             if (childName !in probe.childNames) {
                 client.createCollection(dir).onError { return AppResult.Error(it) }
+                created += childName
             }
         }
-        return AppResult.Success(Unit)
+        // The root listing is handed to the caller: it already says which of folders.json /
+        // deletions / quickpages exist, so those existence probes need not be repeated per round.
+        return AppResult.Success(probe.childNames + created)
     }
 
     /**

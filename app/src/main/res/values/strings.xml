@@ -132,9 +132,10 @@
     <string name="sync_on_app_start_label">Sync when the app starts</string>
     <string name="sync_check_on_open_label">Check for a newer version when opening a notebook</string>
     <string name="sync_on_resume_label">Sync when the app comes back to the foreground (wake-up, app switch)</string>
-    <string name="sync_foreground_interval_label">Sync while in use every</string>
+    <string name="sync_idle_minutes_label">Sync after inactivity of</string>
+    <string name="sync_return_minutes_label">Sync when returning after</string>
     <string name="sync_foreground_interval_off">Off</string>
-    <string name="sync_foreground_interval_hint">Runs only while Notable is on screen — nothing while the device sleeps. A round with no changes is one directory listing plus a few conditional requests.</string>
+    <string name="sync_activity_hint">No periodic polling: one sync after you stop working, and one when you pick the tablet up again after a longer pause. Both only while Notable is on screen. Set either to 0 to switch it off.</string>
     <string name="home_sync_syncing">Syncing…</string>
     <string name="home_sync_failed">Sync failed — tap to retry</string>
     <string name="home_sync_synced_at">Synced %1$s</string>

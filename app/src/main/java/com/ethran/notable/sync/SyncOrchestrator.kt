@@ -86,7 +86,7 @@ class SyncOrchestrator @Inject constructor(
 
             // One root PROPFIND collapses the three directory-existence HEADs and (when the server
             // sends a usable Date header) the dedicated clock-skew HEAD into a single request.
-            syncPreflightService.ensureServerReady(client).onFailure {
+            val rootChildren = syncPreflightService.ensureServerReady(client).onFailure {
                 return@withContext failStep(it)
             }
 
@@ -137,7 +137,10 @@ class SyncOrchestrator @Inject constructor(
                 PROGRESS_SYNCING_FOLDERS,
                 "Syncing folders..."
             )
-            folderSyncService.syncFolders(client, uploadOnly, downloadOnly).onFailure {
+            folderSyncService.syncFolders(
+                client, uploadOnly, downloadOnly,
+                remoteFileExists = SyncPaths.foldersFile().substringAfterLast('/') in rootChildren,
+            ).onFailure {
                 return@withContext failStep(it)
             }
 
@@ -213,9 +216,14 @@ class SyncOrchestrator @Inject constructor(
             // logged and the notebooks' result stands.
             if (settings.syncQuickPages && !downloadOnly) {
                 reporter.beginStep(SyncStep.FINALIZING, PROGRESS_FINALIZING, "Syncing quick pages...")
-                quickPageSyncService.sync(client, uploadOnly).onError {
+                // Logged, never promoted to a run failure: the notebooks synced fine, and a
+                // transient quick-page problem retries on the next round anyway. Promoting it
+                // turned every hiccup into a "Sync failed" snack.
+                quickPageSyncService.sync(
+                    client, uploadOnly,
+                    dirExists = SyncPaths.quickPagesDir().substringAfterLast('/') in rootChildren,
+                ).onError {
                     log.w(TAG, "Quick page sync: ${it.userMessage}")
-                    if (nonCriticalError == null) nonCriticalError = it
                 }
             }
 
@@ -230,7 +238,7 @@ class SyncOrchestrator @Inject constructor(
             if (!uploadOnly && !downloadOnly) {
                 val currentLocalIds = appRepository.bookRepository.getAll().map { it.id }.toSet()
                 notebookSyncService.garbageCollectOrphanedRemotes(
-                    client, currentLocalIds, ORPHAN_MAX_AGE_DAYS
+                    client, currentLocalIds, ORPHAN_MAX_AGE_DAYS, remoteEntries
                 )
             }
 

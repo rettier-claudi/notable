@@ -132,15 +132,17 @@ fun ToolbarElementView(
 
             CustomKind.SYNC -> {
                 val syncState = uiState.syncState
-                val icon = when (syncState) {
-                    is SyncState.Error -> FeatherIcons.AlertTriangle
-                    is SyncState.Success -> FeatherIcons.Check
+                val busy = uiState.syncBusy || syncState is SyncState.Syncing
+                val icon = when {
+                    busy -> FeatherIcons.RefreshCw
+                    syncState is SyncState.Error -> FeatherIcons.AlertTriangle
+                    syncState is SyncState.Success -> FeatherIcons.Check
                     else -> FeatherIcons.RefreshCw
                 }
                 ToolbarButton(
                     // A running sync reads as "pressed" -- the only state e-ink shows cheaply.
-                    isSelected = syncState is SyncState.Syncing,
-                    onSelect = { if (syncState !is SyncState.Syncing) onAction(ToolbarAction.SyncNow) },
+                    isSelected = busy,
+                    onSelect = { if (!busy) onAction(ToolbarAction.SyncNow) },
                     vectorIcon = icon,
                     contentDescription = element.contentDescription,
                 )

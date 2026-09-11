@@ -43,6 +43,7 @@ import com.ethran.notable.editor.canvas.CanvasEventBus
 import com.ethran.notable.editor.utils.DeviceCompat
 import com.ethran.notable.gestures.pageTurnDirectionForKey
 import com.ethran.notable.io.ExportEngine
+import com.ethran.notable.sync.ActivityPulse
 import com.ethran.notable.sync.ForegroundSyncController
 import com.ethran.notable.sync.SyncScheduler
 import com.ethran.notable.ui.AppEventUiBridge
@@ -242,7 +243,7 @@ class MainActivity : ComponentActivity() {
                 if (!hasUsableStorage(this@MainActivity)) return@repeatOnLifecycle
                 try {
                     foregroundSync.get().onAppResumed()
-                    foregroundSync.get().pollWhileResumed()
+                    foregroundSync.get().trackActivityWhileResumed()
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -325,7 +326,15 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        // Every finger/stylus touch the window sees. Stroke commits report separately
+        // (PageDataManager), because Onyx's raw pen path does not go through here.
+        if (ev?.actionMasked == android.view.MotionEvent.ACTION_DOWN) ActivityPulse.touch()
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        ActivityPulse.touch()
         // Auto-repeat while holding a key would flip through the whole notebook.
         if (event != null && event.repeatCount > 0 && pageTurnDirectionForKey(keyCode) != null &&
             CanvasEventBus.pageTurnKey.subscriptionCount.value > 0 &&

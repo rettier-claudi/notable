@@ -51,7 +51,8 @@ data class LibraryUiState(
     val folders: List<Folder> = emptyList(),
     val books: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
-    val syncBadges: Map<String, SyncBadge> = emptyMap()
+    val syncBadges: Map<String, SyncBadge> = emptyMap(),
+    val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
 )
 
 /** What the home screen's sync chip shows; a pure function of engine state, settings and badges. */
@@ -59,6 +60,8 @@ data class HomeSyncStatus(
     val enabled: Boolean = false,
     val state: SyncState = SyncState.Idle,
     val lastSyncTime: Long? = null,
+    /** A sync is enqueued or running (WorkManager), even before the engine reports progress. */
+    val busy: Boolean = false,
     /** Notebooks with local edits not yet on the server. */
     val pendingCount: Int = 0,
     /** Notebooks whose last sync ended in a conflict or error. */
@@ -70,7 +73,8 @@ private data class LibraryDatabaseState(
     val folders: List<Folder> = emptyList(),
     val books: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
-    val syncBadges: Map<String, SyncBadge> = emptyMap()
+    val syncBadges: Map<String, SyncBadge> = emptyMap(),
+    val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -111,9 +115,10 @@ class LibraryViewModel @Inject constructor(
 
     // 2. Group the database flows (plus per-notebook sync badges) semantically
     private val _dbDataFlow = combine(
-        _foldersFlow, _booksFlow, _singlePagesFlow, syncStatusStore.badges
-    ) { folders, books, pages, badges ->
-        LibraryDatabaseState(folders, books, pages, badges)
+        _foldersFlow, _booksFlow, _singlePagesFlow,
+        syncStatusStore.badges, syncStatusStore.quickPageBadges
+    ) { folders, books, pages, badges, quickBadges ->
+        LibraryDatabaseState(folders, books, pages, badges, quickBadges)
     }
 
     // 3. Expose the final UI State
@@ -128,7 +133,8 @@ class LibraryViewModel @Inject constructor(
             folders = dbData.folders,
             books = dbData.books,
             singlePages = dbData.singlePages,
-            syncBadges = dbData.syncBadges
+            syncBadges = dbData.syncBadges,
+            quickPageBadges = dbData.quickPageBadges,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -154,12 +160,13 @@ class LibraryViewModel @Inject constructor(
     }
 
     val syncStatus: StateFlow<HomeSyncStatus> = combine(
-        _syncSettingsFlow, syncStatusStore.badges
-    ) { (enabled, state, last), badges ->
+        _syncSettingsFlow, syncStatusStore.badges, syncScheduler.immediateSyncActive()
+    ) { (enabled, state, last), badges, busy ->
         HomeSyncStatus(
             enabled = enabled,
             state = state,
             lastSyncTime = last,
+            busy = busy,
             pendingCount = badges.values.count { it == SyncBadge.NOT_SYNCED },
             conflictCount = badges.values.count { it == SyncBadge.CONFLICT || it == SyncBadge.ERROR },
         )

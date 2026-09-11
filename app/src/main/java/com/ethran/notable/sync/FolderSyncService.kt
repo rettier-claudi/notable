@@ -21,14 +21,15 @@ class FolderSyncService @Inject constructor(
     suspend fun syncFolders(
         client: WebDAVClient,
         uploadOnly: Boolean,
-        downloadOnly: Boolean = false
+        downloadOnly: Boolean = false,
+        /** From the preflight's root listing — saves a HEAD on folders.json every round. */
+        remoteFileExists: Boolean = true,
     ): AppResult<Unit, DomainError> {
         log.i(TAG, "Syncing folders...")
         val localFolders = appRepository.folderRepository.getAll()
         val remotePath = SyncPaths.foldersFile()
 
-        val remoteExists = client.exists(remotePath).onFailure { return AppResult.Error(it) }
-        if (remoteExists) {
+        if (remoteFileExists) {
             return client.getFileWithMetadata(remotePath).flatMap { remoteFile ->
                 // Null when the server issues no ETag: the PUT below then goes out unguarded rather
                 // than failing. Failing would abort the whole run (SyncOrchestrator treats folder
