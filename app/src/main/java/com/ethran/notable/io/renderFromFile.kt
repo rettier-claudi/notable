@@ -77,11 +77,23 @@ fun loadBackgroundBitmap(filePath: String, pageNumber: Int, scale: Float): Bitma
         return null
     }
     log.i("loadBackgroundBitmap: $filePath -> ${file.absolutePath} (${file.length()} bytes)")
+    if (!File(filePath).isAbsolute) {
+        com.ethran.notable.sync.SyncLogger.i(
+            "Render", "background '$filePath' -> ${file.absolutePath}, ${file.length()} bytes"
+        )
+    }
     val timer = Timing("loadBackgroundBitmap")
     if (!filePath.endsWith(".pdf", ignoreCase = true)) {
         try {
             timer.step("decode bitmap image")
             val result = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+            if (!File(filePath).isAbsolute) {
+                com.ethran.notable.sync.SyncLogger.i(
+                    "Render",
+                    "background '$filePath' decoded: " +
+                        (result?.let { "${it.width}x${it.height}" } ?: "null")
+                )
+            }
             if (result == null)
                 log.e(
                     "loadBackgroundBitmap: result is null, couldn't decode image, file name ends with ${

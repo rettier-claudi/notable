@@ -84,6 +84,7 @@ class NotebookSyncService @Inject constructor(
     private val reporter: SyncProgressReporter,
     private val kvProxy: KvProxy,
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
+    private val pageDataManager: dagger.Lazy<com.ethran.notable.data.PageDataManager>,
     @param:ApplicationContext private val context: Context
 ) {
     private val log = SyncLogger
@@ -1265,9 +1266,21 @@ class NotebookSyncService @Inject constructor(
         // 5. Persist the page atomically: delete-old + update + insert-new run in one transaction,
         //    so a crash can't leave the page with old strokes gone and new ones not yet written.
         try {
+            // Did the content really change? Re-downloading our own upload (same updatedAt) must
+            // not bother the editor.
+            val local = appRepository.pageRepository.getById(pageId)
+            val changed = local == null ||
+                kotlin.math.abs(local.updatedAt.time - page.updatedAt.time) > 1000L
             appRepository.replaceDownloadedPage(page, strokes, updatedImages)
-            // Let an open editor know its page just changed underneath it (see EditorViewModel).
-            appEventBus.tryEmit(com.ethran.notable.data.events.AppEvent.PageDownloaded(pageId, notebookId))
+            // The in-memory page cache (strokes + rendered bitmap) still holds the old content;
+            // drop it so the next open renders from the DB. The page on screen cannot be dropped
+            // here -- the editor reloads it on the event below.
+            val cache = pageDataManager.get()
+            if (cache.getCurrentPageId() != pageId) cache.removePage(pageId)
+            if (changed) {
+                SyncLogger.i(TAG, "Page $pageId replaced by download (${strokes.size} strokes, bg=${page.background})")
+                appEventBus.tryEmit(com.ethran.notable.data.events.AppEvent.PageDownloaded(pageId, notebookId))
+            }
         } catch (e: Exception) {
             errors.add(DomainError.DatabaseError("Failed to save page $pageId: ${e.message}"))
         }

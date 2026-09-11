@@ -235,7 +235,7 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch {
             appEventBus.events.collect { event ->
                 if (event !is com.ethran.notable.data.events.AppEvent.PageDownloaded) return@collect
-                if (event.pageId != currentPageId) return@collect
+                if (!editorActive || event.pageId != currentPageId) return@collect
                 if (com.ethran.notable.utils.AppResumeClock.millisSinceResume() <= RELOAD_AFTER_RESUME_MS) {
                     log.i("Page ${event.pageId} downloaded shortly after resume - reloading canvas")
                     sendCanvasCommand(CanvasCommand.RefreshCanvas)
@@ -287,6 +287,11 @@ class EditorViewModel @Inject constructor(
     private var bookId: String? = null
     private val currentPageId: String get() = _toolbarState.value.pageId.orEmpty()
 
+    /** True between loadToolbarState and onDispose: the editor is on screen. The ViewModel can
+     * outlive the editor screen, so sync events must not surface snacks in the library. */
+    @Volatile
+    private var editorActive = false
+
     // ---- Init guard ----
     private val didInitSettings = AtomicBoolean(false)
 
@@ -326,6 +331,7 @@ class EditorViewModel @Inject constructor(
      * Performs cleanup, exports linked files, and triggers auto-sync.
      */
     fun onDispose(page: PageView) {
+        editorActive = false
         // 1. Finish selection operation
         selectionState.applySelectionDisplace(page)
         bookId?.let { bookId ->
@@ -602,6 +608,7 @@ class EditorViewModel @Inject constructor(
     suspend fun loadToolbarState(bookId: String?, pageId: String) {
         log.v("loadBookData: bookId=$bookId, pageId=$pageId")
         this.bookId = bookId
+        editorActive = true
 
         val page = appRepository.pageRepository.getById(pageId)
 

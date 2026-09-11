@@ -650,6 +650,14 @@ class PageDataManager @Inject constructor(
 
             // Suspend I/O happens OUTSIDE the lock.
             val pageWithData = appRepository.pageRepository.getWithDataById(pageId)
+            if (pageWithData != null) {
+                com.ethran.notable.sync.SyncLogger.i(
+                    "Render",
+                    "loaded page $pageId: ${pageWithData.strokes.size} strokes, " +
+                        "${pageWithData.images.size} images, bg=${pageWithData.page.background} " +
+                        "(${pageWithData.page.backgroundType})"
+                )
+            }
             if (pageWithData == null) {
                 log.w("Missing page Data.")
                 appEventBus.tryEmit(AppEvent.ActionHint("Missing Page Data", 2000))
