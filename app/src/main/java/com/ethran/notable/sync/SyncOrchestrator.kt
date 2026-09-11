@@ -11,6 +11,7 @@ import com.ethran.notable.utils.flatMap
 import com.ethran.notable.utils.getOrElse
 import com.ethran.notable.utils.getOrNull
 import com.ethran.notable.utils.onError
+import com.ethran.notable.utils.map
 import com.ethran.notable.utils.onFailure
 import com.ethran.notable.utils.onSuccess
 import kotlinx.coroutines.CancellationException
@@ -32,6 +33,7 @@ class SyncOrchestrator @Inject constructor(
     private val notebookSyncService: NotebookSyncService,
     private val syncForceService: SyncForceService,
     private val notebookReconciliationService: NotebookReconciliationService,
+    private val quickPageSyncService: QuickPageSyncService,
     private val webDavClientFactory: WebDavClientFactoryPort,
     private val reporter: SyncProgressReporter,
     @param:ApplicationScope private val appScope: CoroutineScope,
@@ -207,6 +209,16 @@ class SyncOrchestrator @Inject constructor(
             }
 
 
+            // Quick pages: one-way up, deletions down. Never fails the run; its errors are
+            // logged and the notebooks' result stands.
+            if (settings.syncQuickPages && !downloadOnly) {
+                reporter.beginStep(SyncStep.FINALIZING, PROGRESS_FINALIZING, "Syncing quick pages...")
+                quickPageSyncService.sync(client, uploadOnly).onError {
+                    log.w(TAG, "Quick page sync: ${it.userMessage}")
+                    if (nonCriticalError == null) nonCriticalError = it
+                }
+            }
+
             reporter.beginStep(SyncStep.FINALIZING, PROGRESS_FINALIZING, "Finalizing...")
             // No bulk finalize needed: each notebook's sync-state row is written at its own commit
             // point (upload/download success), and deletions dropped their rows above.
@@ -313,9 +325,30 @@ class SyncOrchestrator @Inject constructor(
         if (!settings.syncEnabled || !settings.syncOnNoteClose) return
         try {
             val page = appRepository.pageRepository.getById(pageId) ?: return
-            page.notebookId?.let { syncNotebook(it) }
+            val notebookId = page.notebookId
+            if (notebookId != null) syncNotebook(notebookId)
+            else if (settings.syncQuickPages) syncQuickPages()
         } catch (e: Exception) {
             log.e(TAG, "Auto-sync failed: ${e.message}")
+        }
+    }
+
+    /** Quick pages only (closing a quick page): skip-if-busy like [syncNotebook]. */
+    suspend fun syncQuickPages(): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
+        if (!syncMutex.tryLock()) return@withContext AppResult.Success(Unit)
+        try {
+            val settings = kvProxy.getSyncSettings()
+            if (!settings.syncEnabled || !settings.syncQuickPages || settings.downloadOnly) {
+                return@withContext AppResult.Success(Unit)
+            }
+            if (syncPreflightService.checkWifiConstraint() is AppResult.Error) return@withContext AppResult.Success(Unit)
+            if (settings.username.isBlank() || settings.password.isBlank()) {
+                return@withContext AppResult.Error(DomainError.SyncAuthError)
+            }
+            val client = webDavClientFactory.create(settings.serverUrl, settings.username, settings.password)
+            quickPageSyncService.sync(client, settings.uploadOnly).map { }
+        } finally {
+            syncMutex.unlock()
         }
     }
 

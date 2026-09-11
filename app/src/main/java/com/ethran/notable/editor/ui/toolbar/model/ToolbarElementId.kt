@@ -19,6 +19,12 @@ enum class ToolbarElementId {
     SHAPE, ERASER, SELECT, IMAGE, PASTE, RESET_VIEW,
     UNDO, REDO, PAGE_NAV, HOME, MENU,
 
+    /** Sync status button: icon reflects the engine state, tap starts a sync. */
+    SYNC,
+
+    /** "Sync and notify": sync, then POST to the configured webhook (hidden without a URL). */
+    SYNC_NOTIFY,
+
     /** Placeable pseudo-element: a vertical divider. May appear multiple times in a layout. */
     DIVIDER;
     // future: TEXT

@@ -83,6 +83,10 @@ class SyncScheduler @Inject constructor(
         workManager.cancelAllWorkByTag(SyncWorker.SYNC_WORK_TAG)
     }
 
+    /** Unique work name of an immediate sync; observe it to learn when the request has finished. */
+    fun uniqueNameFor(request: SyncRequest): String =
+        "${SyncWorker.WORK_NAME}-immediate-${request.typeKey}-${request.identifier}"
+
     fun triggerImmediateSync(
         request: SyncRequest = SyncRequest.SyncAll
     ): UUID {
@@ -94,7 +98,7 @@ class SyncScheduler @Inject constructor(
             .addTag(SyncWorker.SYNC_WORK_TAG)
             .build()
 
-        val uniqueName = "${SyncWorker.WORK_NAME}-immediate-${request.typeKey}-${request.identifier}"
+        val uniqueName = uniqueNameFor(request)
 
         // KEEP, not REPLACE: a sync already running for this unique name satisfies the request.
         // REPLACE would cancel an in-flight worker mid-sync (e.g. app restarted during a sync).

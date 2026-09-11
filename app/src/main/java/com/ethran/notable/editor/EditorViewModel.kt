@@ -97,6 +97,13 @@ data class ToolbarUiState(
     val hasClipboard: Boolean = false,
     val isDrawing: Boolean = true,
     val isQuickNavOpen: Boolean = false,
+
+    // Sync (toolbar SYNC / SYNC_NOTIFY buttons)
+    val syncEnabled: Boolean = false,
+    val syncWebhookConfigured: Boolean = false,
+    val syncState: com.ethran.notable.sync.SyncState = com.ethran.notable.sync.SyncState.Idle,
+    /** A "sync and notify" is running: sync in flight or webhook POST pending. */
+    val syncNotifyPending: Boolean = false,
 ) {
     /** The active preset's setting — what the drawing pipeline draws with. The fallback
      * only triggers if the active preset was deleted mid-session. */
@@ -140,6 +147,8 @@ sealed class ToolbarAction {
     object NavigateToBugReport : ToolbarAction()
     object NavigateToPages : ToolbarAction()
     object NavigateToHome : ToolbarAction()
+    object SyncNow : ToolbarAction()
+    object SyncAndNotify : ToolbarAction()
 
     object CloseAllMenus : ToolbarAction()
     data class UpdateQuickNavOpen(val isOpen: Boolean) : ToolbarAction()
@@ -174,6 +183,8 @@ sealed class EditorUiEvent {
 // 5. VIEW MODEL
 // --------------------------------------------------------
 
+private const val RELOAD_AFTER_RESUME_MS = 10_000L
+
 @HiltViewModel
 class EditorViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -182,6 +193,10 @@ class EditorViewModel @Inject constructor(
     private val exportEngine: ExportEngine,
     val pageDataManager: PageDataManager,
     private val syncOrchestrator: SyncOrchestrator,
+    private val syncScheduler: com.ethran.notable.sync.SyncScheduler,
+    private val syncProgressReporter: com.ethran.notable.sync.SyncProgressReporter,
+    private val syncWebhookNotifier: com.ethran.notable.sync.SyncWebhookNotifier,
+    private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     val snackDispatcher: SnackDispatcher,
     private val historyFactory: History.Factory,
     @param:ApplicationScope private val appScope: CoroutineScope
@@ -193,6 +208,50 @@ class EditorViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             ClipboardStore.content.collect { setHasClipboard(it != null) }
+        }
+        // Sync state for the toolbar buttons; settings re-read on every state change so a URL
+        // entered in settings shows the notify button without reopening the editor.
+        viewModelScope.launch {
+            syncProgressReporter.state.collect { state ->
+                val settings = runCatching { appRepository.kvProxy.getSyncSettings() }.getOrNull()
+                _toolbarState.update {
+                    it.copy(
+                        syncState = state,
+                        syncEnabled = settings?.syncEnabled == true,
+                        syncWebhookConfigured = !settings?.syncWebhookUrl.isNullOrBlank(),
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            syncWebhookNotifier.pending.collect { pending ->
+                _toolbarState.update { it.copy(syncNotifyPending = pending) }
+            }
+        }
+        // The page on screen was replaced by a server download. Right after start/wake-up
+        // (the resume sync) the user has not drawn yet: reload silently, so the wake-up sync
+        // never turns into a conflict. Later, ask -- a silent reload would discard the strokes
+        // drawn since the sync started.
+        viewModelScope.launch {
+            appEventBus.events.collect { event ->
+                if (event !is com.ethran.notable.data.events.AppEvent.PageDownloaded) return@collect
+                if (event.pageId != currentPageId) return@collect
+                if (com.ethran.notable.utils.AppResumeClock.millisSinceResume() <= RELOAD_AFTER_RESUME_MS) {
+                    log.i("Page ${event.pageId} downloaded shortly after resume - reloading canvas")
+                    sendCanvasCommand(CanvasCommand.RefreshCanvas)
+                    snackDispatcher.showOrUpdateSnack(
+                        SnackConf(text = "Page updated from server", duration = 2000)
+                    )
+                } else {
+                    snackDispatcher.showOrUpdateSnack(
+                        SnackConf(
+                            text = "This page changed on the server.",
+                            duration = 8000,
+                            actions = listOf("Reload" to { sendCanvasCommand(CanvasCommand.RefreshCanvas) })
+                        )
+                    )
+                }
+            }
         }
         // The pen presets in AppSettings are the source of truth for per-pen color/size;
         // mirror them into ToolbarUiState.penSettings so the (non-Compose) drawing
@@ -346,6 +405,10 @@ class EditorViewModel @Inject constructor(
             ToolbarAction.NavigateToBugReport -> sendUiEvent(EditorUiEvent.NavigateToBugReport)
             ToolbarAction.NavigateToPages -> handleNavigateToPages()
             ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
+            ToolbarAction.SyncNow -> syncScheduler.triggerImmediateSync()
+            ToolbarAction.SyncAndNotify -> syncWebhookNotifier.syncThenNotify(
+                pageId = _toolbarState.value.pageId, notebookId = bookId
+            )
 
             ToolbarAction.CloseAllMenus -> handleCloseAllMenus()
             is ToolbarAction.UpdateQuickNavOpen -> {

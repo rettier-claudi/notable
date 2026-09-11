@@ -90,6 +90,9 @@ and time if necessary.
 | **Auto sync every … minutes** | Schedules background sync every 15–240 minutes. Android may delay it for battery or network reasons. |
 | **Sync on app start** | Schedules a full sync when Notable's main screen starts. |
 | **Sync when the app comes back to the foreground** | Schedules a full sync when Notable resumes after the device slept or you switched apps. At most one request per 30 seconds, skipped while offline. |
+| **Sync when leaving the app** | Schedules a full sync when Notable leaves the screen (home button, app switch, sleep). Not rate-limited. |
+| **Sync quick pages** | Uploads pages without a notebook to `quickpages/` (one-way). A page file removed on the server removes the page on the device unless it was edited since its last upload. |
+| **Notify URL** | Optional. The toolbar's "sync and notify" button syncs, waits, then POSTs a JSON body to this URL. |
 | **Sync while in use every … minutes** | Foreground poll: while Notable is on screen, a full sync every 1–30 minutes (Off = never). Nothing runs while the device sleeps; the auto sync above stays the background fallback. A round with no changes is one directory listing plus a few conditional requests. |
 | **Sync when closing notes** | Syncs only the notebook you closed. It skips the attempt if another sync holds the lock. |
 | **Check for newer version when opening a notebook** | Checks the remote manifest and offers **Sync now** when it is newer. Network and authentication errors do not block opening the notebook. |

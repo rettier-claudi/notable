@@ -54,6 +54,7 @@ import com.ethran.notable.ui.SyncWorkUiBridge
 import com.ethran.notable.ui.components.NotableApp
 import com.ethran.notable.ui.components.crashLogsAsText
 import com.ethran.notable.ui.theme.InkaTheme
+import com.ethran.notable.utils.AppResumeClock
 import com.ethran.notable.utils.hasUsableStorage
 import com.onyx.android.sdk.api.device.epd.EpdController
 import dagger.hilt.android.AndroidEntryPoint
@@ -270,6 +271,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // The app left the screen (home, app switch, device sleep): push what was just written.
+        // lifecycleScope lives until onDestroy, so the request is still made after onStop.
+        lifecycleScope.launch {
+            try {
+                if (hasUsableStorage(this@MainActivity)) foregroundSync.get().onAppStopped()
+            } catch (e: Exception) {
+                Log.w(TAG, "Sync on app close failed: ${e.message}")
+            }
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         this.lifecycleScope.launch {
@@ -291,6 +305,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppResumeClock.markResumed()
         enableFullScreen()
         lifecycleScope.launch {
             CanvasEventBus.onFocusChange.emit(true)

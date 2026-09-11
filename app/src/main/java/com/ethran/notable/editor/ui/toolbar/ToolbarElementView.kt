@@ -50,7 +50,12 @@ import com.ethran.notable.editor.ui.toolbar.model.ShapeElement
 import com.ethran.notable.editor.ui.toolbar.model.ToolbarElement
 import com.ethran.notable.editor.utils.Eraser
 import com.ethran.notable.ui.convertDpToPixel
+import com.ethran.notable.sync.SyncState
 import com.ethran.notable.ui.noRippleClickable
+import compose.icons.FeatherIcons
+import compose.icons.feathericons.AlertTriangle
+import compose.icons.feathericons.Check
+import compose.icons.feathericons.RefreshCw
 
 /**
  * The single generic renderer for toolbar elements: draws the button (via [ToolbarButton]),
@@ -124,6 +129,30 @@ fun ToolbarElementView(
                         textAlign = TextAlign.Center
                     )
                 }
+
+            CustomKind.SYNC -> {
+                val syncState = uiState.syncState
+                val icon = when (syncState) {
+                    is SyncState.Error -> FeatherIcons.AlertTriangle
+                    is SyncState.Success -> FeatherIcons.Check
+                    else -> FeatherIcons.RefreshCw
+                }
+                ToolbarButton(
+                    // A running sync reads as "pressed" -- the only state e-ink shows cheaply.
+                    isSelected = syncState is SyncState.Syncing,
+                    onSelect = { if (syncState !is SyncState.Syncing) onAction(ToolbarAction.SyncNow) },
+                    vectorIcon = icon,
+                    contentDescription = element.contentDescription,
+                )
+            }
+
+            CustomKind.SYNC_NOTIFY ->
+                ToolbarButton(
+                    isSelected = uiState.syncNotifyPending,
+                    onSelect = { if (!uiState.syncNotifyPending) onAction(ToolbarAction.SyncAndNotify) },
+                    vectorIcon = (element.icon as? IconRef.Vector)?.imageVector,
+                    contentDescription = element.contentDescription,
+                )
 
             CustomKind.MENU ->
                 Column {

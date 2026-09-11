@@ -12,6 +12,8 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.Clipboard
 import compose.icons.feathericons.EyeOff
 import compose.icons.feathericons.RefreshCcw
+import compose.icons.feathericons.RefreshCw
+import compose.icons.feathericons.Send
 
 /**
  * The registry: every placeable **static** toolbar element, keyed by id. Pen buttons are
@@ -94,6 +96,20 @@ object ToolbarElements {
             icon = IconRef.Drawable(R.drawable.home),
             contentDescription = "library",
             action = ToolbarAction.NavigateToHome,
+        ),
+        CustomElement(
+            id = ToolbarElementId.SYNC,
+            icon = IconRef.Vector(FeatherIcons.RefreshCw),
+            contentDescription = "sync",
+            visibleWhen = { state, _ -> state.syncEnabled },
+            kind = CustomKind.SYNC,
+        ),
+        CustomElement(
+            id = ToolbarElementId.SYNC_NOTIFY,
+            icon = IconRef.Vector(FeatherIcons.Send),
+            contentDescription = "sync and notify",
+            visibleWhen = { state, _ -> state.syncEnabled && state.syncWebhookConfigured },
+            kind = CustomKind.SYNC_NOTIFY,
         ),
         CustomElement(
             id = ToolbarElementId.MENU,

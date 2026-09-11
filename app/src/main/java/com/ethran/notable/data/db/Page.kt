@@ -83,6 +83,10 @@ interface PageDao {
     @Query("SELECT id FROM page WHERE notebookId = :notebookId")
     suspend fun getPageIdsForNotebook(notebookId: String): List<String>
 
+    /** Every quick page (no notebook), regardless of folder -- the quick-page sync's local set. */
+    @Query("SELECT * FROM page WHERE notebookId is null")
+    suspend fun getAllSinglePages(): List<Page>
+
     @Insert
     suspend fun create(page: Page): Long
 
@@ -145,6 +149,8 @@ class PageRepository @Inject constructor(
     fun getSinglePagesInFolder(folderId: String? = null): LiveData<List<Page>> {
         return db.getSinglePagesInFolder(folderId)
     }
+
+    suspend fun getAllSinglePages(): List<Page> = db.getAllSinglePages()
 
     suspend fun update(page: Page) {
         return db.update(page)

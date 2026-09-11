@@ -294,4 +294,11 @@
     <string name="home_sync_pending">%1$d niezsynchronizowane</string>
     <string name="home_sync_conflict">Konflikt — zobacz zeszyt</string>
     <string name="home_sync_offline">Offline</string>
+    <string name="sync_on_app_close_label">Synchronizuj przy opuszczaniu aplikacji (przycisk home, przełączenie aplikacji)</string>
+    <string name="sync_quick_pages_label">Synchronizuj szybkie strony (tylko wysyłanie; strona usunięta na serwerze jest usuwana tutaj)</string>
+    <string name="sync_quick_pages_hint">Szybkie strony trafiają do quickpages/ na serwerze, gdy się zmieniają. Nic nie jest pobierane — poza usunięciem: gdy strona serwera zabrała stronę i ją usunęła, znika także tutaj (chyba że od tego czasu ją edytowano, wtedy jest wysyłana ponownie).</string>
+    <string name="sync_webhook_url_label">Adres powiadomienia (pasek narzędzi „synchronizuj i powiadom”)</string>
+    <string name="sync_webhook_url_hint">Opcjonalnie. Przycisk „synchronizuj i powiadom” na pasku narzędzi uruchamia synchronizację, a potem wysyła HTTP POST z małym JSON-em na ten adres. Zostaw puste, aby ukryć przycisk.</string>
+    <string name="toolbar_element_sync">Stan synchronizacji / synchronizuj teraz</string>
+    <string name="toolbar_element_sync_notify">Synchronizuj i powiadom</string>
 </resources>

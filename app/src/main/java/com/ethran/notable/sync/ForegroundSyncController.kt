@@ -35,8 +35,11 @@ class ForegroundSyncController @Inject constructor(
     @Volatile
     private var lastRequestAt = 0L
 
-    /** Trigger a full sync unless one was requested less than [MIN_GAP_MS] ago or we are offline. */
-    suspend fun requestSync(reason: String): Boolean {
+    /**
+     * Trigger a full sync unless one was requested less than [MIN_GAP_MS] ago or we are offline.
+     * [force] skips the rate limit (used when leaving the app: that sync must not be dropped).
+     */
+    suspend fun requestSync(reason: String, force: Boolean = false): Boolean {
         val settings = try {
             kvProxy.getSyncSettings()
         } catch (e: Exception) {
@@ -46,7 +49,7 @@ class ForegroundSyncController @Inject constructor(
         if (!settings.syncEnabled) return false
         if (settings.username.isBlank() || settings.password.isBlank()) return false
         val now = System.currentTimeMillis()
-        if (now - lastRequestAt < MIN_GAP_MS) {
+        if (!force && now - lastRequestAt < MIN_GAP_MS) {
             Log.d(TAG, "Skipping $reason sync: last request ${now - lastRequestAt} ms ago")
             return false
         }
@@ -73,6 +76,20 @@ class ForegroundSyncController @Inject constructor(
         }
         if (!settings.syncOnResume) return
         requestSync("resume")
+    }
+
+    /**
+     * Called from the activity's onStop (app left the screen). Not rate-limited: the user may have
+     * written something in the last seconds, and the process may be frozen soon after.
+     */
+    suspend fun onAppStopped() {
+        val settings = try {
+            kvProxy.getSyncSettings()
+        } catch (e: Exception) {
+            return
+        }
+        if (!settings.syncOnAppClose) return
+        requestSync("app close", force = true)
     }
 
     /**

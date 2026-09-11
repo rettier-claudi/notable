@@ -83,6 +83,7 @@ class NotebookSyncService @Inject constructor(
     private val appRepository: AppRepository,
     private val reporter: SyncProgressReporter,
     private val kvProxy: KvProxy,
+    private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     @param:ApplicationContext private val context: Context
 ) {
     private val log = SyncLogger
@@ -1265,6 +1266,8 @@ class NotebookSyncService @Inject constructor(
         //    so a crash can't leave the page with old strokes gone and new ones not yet written.
         try {
             appRepository.replaceDownloadedPage(page, strokes, updatedImages)
+            // Let an open editor know its page just changed underneath it (see EditorViewModel).
+            appEventBus.tryEmit(com.ethran.notable.data.events.AppEvent.PageDownloaded(pageId, notebookId))
         } catch (e: Exception) {
             errors.add(DomainError.DatabaseError("Failed to save page $pageId: ${e.message}"))
         }

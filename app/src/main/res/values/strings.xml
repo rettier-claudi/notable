@@ -142,6 +142,13 @@
     <string name="home_sync_pending">%1$d not synced</string>
     <string name="home_sync_conflict">Conflict — see notebook</string>
     <string name="home_sync_offline">Offline</string>
+    <string name="sync_on_app_close_label">Sync when leaving the app (home button, app switch)</string>
+    <string name="sync_quick_pages_label">Sync quick pages (upload only; a page removed on the server is removed here)</string>
+    <string name="sync_quick_pages_hint">Quick pages go to quickpages/ on the server as they change. Nothing is downloaded — except a deletion: when the server side has taken a page and removed it, it disappears here too (unless you edited it since, then it is uploaded again).</string>
+    <string name="sync_webhook_url_label">Notify URL (toolbar ”sync and notify”)</string>
+    <string name="sync_webhook_url_hint">Optional. The toolbar\'s ”sync and notify” button runs a sync and then sends an HTTP POST with a small JSON body to this URL. Leave empty to hide the button.</string>
+    <string name="toolbar_element_sync">Sync status / sync now</string>
+    <string name="toolbar_element_sync_notify">Sync and notify</string>
     <string name="sync_download_only_label">Download only (never push local changes)</string>
     <string name="sync_upload_only_label">Upload only (skip remote changes)</string>
     <string name="sync_upload_only_hint">Pushes local changes to the server but never downloads. It never overwrites a newer copy on the server and never modifies your local notebooks — notebooks that are newer on the server are just left as they are on this device.</string>

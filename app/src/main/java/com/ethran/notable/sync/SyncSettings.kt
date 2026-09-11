@@ -24,6 +24,19 @@ data class SyncSettings(
      * device sleeps; the >= 15 min WorkManager job stays the background fallback.
      */
     val foregroundSyncIntervalMinutes: Int = 2,
+    /** Run a full sync when the app leaves the screen (home button, app switch), so nothing is missed. */
+    val syncOnAppClose: Boolean = true,
+    /**
+     * Quick pages (pages without a notebook) are uploaded one-way to `quickpages/` on the server;
+     * the only thing taken from the server is a deletion: a page file removed there removes the
+     * page here (unless it was edited since its last upload, then it is re-uploaded instead).
+     */
+    val syncQuickPages: Boolean = true,
+    /**
+     * Optional HTTP endpoint the toolbar's "sync and notify" button POSTs to after the sync it
+     * started has finished -- used to kick a server-side consumer immediately. Empty = button hidden.
+     */
+    val syncWebhookUrl: String = "",
     /** When opening a notebook, check whether the server has a newer version and hint the user. */
     val checkOnOpen: Boolean = true,
     val wifiOnly: Boolean = false,

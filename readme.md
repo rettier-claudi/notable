@@ -72,8 +72,25 @@ the `upstream` remote and merged in as it moves.
   Previously only a fresh app start synced, so a tablet that merely woke up never pulled changes.
 - **Sync while in use every N minutes** (default 2, Off/1/2/5/10/15/30): a foreground poll that
   only runs while Notable is on screen. The ≥ 15 min WorkManager job stays the background fallback.
-- **Sync indicator and button on the home screen**: state of the engine, time of the last
-  successful sync, count of notebooks with unsynced edits or conflicts. Tap = "Sync now" / retry.
+- **Sync indicator and button on the home screen** (top right, next to settings): state of the
+  engine, time of the last successful sync, count of notebooks with unsynced edits or conflicts.
+  Tap = "Sync now" / retry.
+- **Toolbar buttons** `SYNC` (status icon: syncing = pressed, ✓ after success, ⚠ after an error;
+  tap = sync now) and `SYNC_NOTIFY` (sync, wait for it to finish, then HTTP POST a small JSON to
+  *Settings → Sync → Notify URL*; hidden without a URL). Both are in the default pinned zone and
+  placeable via *Settings → Toolbar* for custom layouts. Body:
+  `{"source":"notable","event":"sync-and-notify","pageId":…,"notebookId":…,"syncSucceeded":true,"time":"…Z"}`.
+- **Sync when leaving the app** (*Settings → Sync*, default on): a full sync on `onStop`, not
+  rate-limited, so the last strokes are on the server before the tablet sleeps.
+- **Quick pages sync** (*Settings → Sync*, default on): pages without a notebook are uploaded
+  one-way to `notable/quickpages/<pageId>.json` (images under `quickpages/images/`) whenever they
+  change; a quick page deleted on the device is deleted on the server. The only thing taken from
+  the server is a deletion: remove the page file there and the page disappears on the device —
+  unless it was edited since its last upload, then it is re-uploaded instead. Meant for a server-side
+  consumer that ingests scribbled notes and then removes them.
+- **Page replaced by a download while open**: within 10 s after start/wake-up (the resume sync)
+  the canvas reloads silently; later a snack offers "Reload", so the wake-up sync never turns
+  into a conflict with an untouched page.
 - Sync bug fixes found with a server-side writer:
   - A notebook downloaded in a sync run was tombstoned and deleted from the server one second
     later (`detectAndUploadLocalDeletions` compared sync-state rows against the pre-download

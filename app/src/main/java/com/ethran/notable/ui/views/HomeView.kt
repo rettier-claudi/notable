@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -180,8 +181,8 @@ fun LibraryContent(
     Column(Modifier.fillMaxSize()) {
         Topbar {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow)
                 Spacer(modifier = Modifier.weight(1f))
+                SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow)
                 BadgedBox(
                     badge = {
                         if (!uiState.isLatestVersion) Badge(
@@ -281,7 +282,7 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+            .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
             .border(0.5.dp, Color.Black)
             .padding(horizontal = 10.dp, vertical = 6.dp)
             .noRippleClickable(onClick = { if (!syncing) onSyncNow() })
@@ -298,7 +299,7 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(220.dp)
+            modifier = Modifier.widthIn(max = 260.dp)
         )
     }
 }

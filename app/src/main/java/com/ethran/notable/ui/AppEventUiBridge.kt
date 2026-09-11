@@ -29,6 +29,9 @@ class AppEventUiBridge @Inject constructor(
                 snackDispatcher.showOrUpdateSnack(SnackConf(text = event.message, duration = 4000))
             }
 
+            // Handled by the editor (reload/ask); nothing to show globally.
+            is AppEvent.PageDownloaded -> Unit
+
             is AppEvent.ExportProgress -> {
                 val percent = if (event.total == 0) 0f else event.current.toFloat() / event.total
                 snackDispatcher.showOrUpdateSnack(

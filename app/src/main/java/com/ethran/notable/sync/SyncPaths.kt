@@ -34,4 +34,11 @@ object SyncPaths {
      * timestamp needed for conflict resolution.
      */
     fun tombstone(notebookId: String) = "/$ROOT/deletions/$notebookId"
+
+    // Quick pages (single pages without a notebook): one flat directory of page files, uploaded
+    // one-way; a page file removed on the server removes the page on the device.
+    fun quickPagesDir() = "/$ROOT/quickpages"
+    fun quickPageFile(pageId: String) = "/$ROOT/quickpages/$pageId.json"
+    fun quickPagesImagesDir() = "/$ROOT/quickpages/images"
+    fun quickPageImageFile(imageName: String) = "/$ROOT/quickpages/images/$imageName"
 }

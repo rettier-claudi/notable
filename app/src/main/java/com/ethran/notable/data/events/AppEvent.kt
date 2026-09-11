@@ -23,6 +23,9 @@ sealed interface AppEvent {
 
     data object StrokeMigrationCompleted : AppEvent
     data class DismissMessage(val id: String) : AppEvent
+
+    /** Sync replaced this page's content with the server's copy (notebook download). */
+    data class PageDownloaded(val pageId: String, val notebookId: String) : AppEvent
     data class PreviewBackfillProgress(val current: Int, val total: Int) : AppEvent
     data class PreviewBackfillCompleted(val current: Int, val total: Int) : AppEvent
 

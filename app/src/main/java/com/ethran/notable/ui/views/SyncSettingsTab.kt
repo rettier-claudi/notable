@@ -392,9 +392,38 @@ private fun SyncBehaviorSection(
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
             )
             SettingToggleRow(
+                label = stringResource(R.string.sync_on_app_close_label),
+                value = state.syncSettings.syncOnAppClose,
+                onToggle = { onUpdate(state.syncSettings.copy(syncOnAppClose = it), true) }
+            )
+            SettingToggleRow(
                 label = stringResource(R.string.sync_check_on_open_label),
                 value = state.syncSettings.checkOnOpen,
                 onToggle = { onUpdate(state.syncSettings.copy(checkOnOpen = it), true) }
+            )
+            SettingToggleRow(
+                label = stringResource(R.string.sync_quick_pages_label),
+                value = state.syncSettings.syncQuickPages,
+                onToggle = { onUpdate(state.syncSettings.copy(syncQuickPages = it), true) }
+            )
+            Text(
+                text = stringResource(R.string.sync_quick_pages_hint),
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            EInkTextField(
+                label = stringResource(R.string.sync_webhook_url_label),
+                value = state.syncSettings.syncWebhookUrl,
+                onValueChange = { onUpdate(state.syncSettings.copy(syncWebhookUrl = it), true) },
+                placeholder = "https://example.com/webhook/notable"
+            )
+            Text(
+                text = stringResource(R.string.sync_webhook_url_hint),
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
             )
             SettingToggleRow(
                 label = stringResource(R.string.sync_fast_sync_label),
