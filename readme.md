@@ -106,6 +106,13 @@ the `upstream` remote and merged in as it moves.
   `{"source":"notable","event":"sync-and-notify","pageId":…,"notebookId":…,"syncSucceeded":true,"time":"…Z"}`.
 - **Sync when leaving the app** (*Settings → Sync*, default on): a full sync on `onStop`, not
   rate-limited, so the last strokes are on the server before the tablet sleeps.
+- **Quick pages never deleted on a guess.** Deleting a local quick page because its file is gone
+  from the server needs positive evidence on every count: a listing that actually succeeded (an
+  unknown listing decides nothing), a sync row proving the page reached the server, and no local
+  edit since. A deletion that would take at least three pages and more than half of everything ever
+  uploaded is refused as a misread. Every such deletion writes the page to
+  `Documents/notabledb/quickpages-deleted/<id>.json` first, so it is recoverable by hand. This
+  replaces the v0.2.6-claudi.2/.3 behaviour that could delete local quick pages, which it did.
 - **Quick pages sync** (*Settings → Sync*, default on): pages without a notebook are uploaded
   one-way to `notable/quickpages/<pageId>.json` (images under `quickpages/images/`) whenever they
   change; a quick page deleted on the device is deleted on the server. The only thing taken from

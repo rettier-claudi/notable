@@ -5,12 +5,15 @@ import com.ethran.notable.data.AppRepository
 import com.ethran.notable.data.db.Page
 import com.ethran.notable.data.db.PageSyncState
 import com.ethran.notable.data.deletePage
+import com.ethran.notable.data.getDbDir
 import com.ethran.notable.sync.serializers.NotebookSerializer
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.utils.DomainError
 import com.ethran.notable.utils.ErrorAccumulator
 import com.ethran.notable.utils.getOrElse
+import com.ethran.notable.utils.fold
 import com.ethran.notable.utils.onError
+import com.ethran.notable.utils.onFailure
 import com.ethran.notable.utils.onSuccess
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -53,21 +56,23 @@ class QuickPageSyncService @Inject constructor(
         if (localPages.isEmpty() && rows.isEmpty()) {
             return AppResult.Success(QuickPageSyncSummary(0, 0, 0))
         }
-        // A failed listing must not be mistaken for "the server deleted everything".
-        val remoteNames = if (dirExists) {
-            client.listNames(dir).getOrElse { error ->
-                log.w(TAG, "Quick pages: listing failed, skipping this round: ${error.userMessage}")
-                return AppResult.Error(error)
-            }.toSet()
-        } else {
-            emptySet()
-        }
+        // ALWAYS from a real listing. `null` means "we do not know what is on the server", and the
+        // planner then refuses every local deletion. Assuming an empty server because the listing
+        // was skipped or failed is how quick pages got deleted locally on 2026-09-11: absence of
+        // knowledge must never read as absence of the file.
+        val remoteNames: Set<String>? = client.listNames(dir).fold(
+            onSuccess = { it.toSet() },
+            onError = { error ->
+                log.w(TAG, "Quick pages: listing failed, no deletions this round: ${error.userMessage}")
+                null
+            }
+        )
         val plan = planQuickPageSync(localPages, rows, remoteNames)
         log.i(
             TAG,
-            "Quick pages: ${localPages.size} local, ${remoteNames.size} remote file(s), " +
+            "Quick pages: ${localPages.size} local, ${remoteNames?.size ?: "?"} remote file(s), " +
                 "${plan.upload.size} to upload, ${plan.deleteRemote.size} to delete on server, " +
-                "${plan.deleteLocal.size} deleted on server"
+                "${plan.deleteLocal.size} removed on server"
         )
 
         val errors = ErrorAccumulator()
@@ -95,9 +100,13 @@ class QuickPageSyncService @Inject constructor(
         var deletedRemote = 0
         for (pageId in plan.deleteRemote) {
             val path = SyncPaths.quickPageFile(pageId)
-            val gone = if (pageId.jsonName() in remoteNames) {
+            // Listing unknown -> attempt the DELETE anyway (idempotent); dropping the row on a
+            // guess would strand the file on the server forever.
+            val gone = if (remoteNames != null && pageId.jsonName() !in remoteNames) {
+                true
+            } else {
                 client.delete(path).onError { errors.add(it) } is AppResult.Success
-            } else true
+            }
             if (gone) {
                 deletedRemote++
                 appRepository.pageSyncStateRepository.deleteByIds(listOf(pageId))
@@ -105,15 +114,29 @@ class QuickPageSyncService @Inject constructor(
         }
 
         var deletedLocal = 0
-        if (!uploadOnly) {
-            for (pageId in plan.deleteLocal) {
-                try {
-                    deletePage(appRepository, pageId, context.filesDir)
-                    appRepository.pageSyncStateRepository.deleteByIds(listOf(pageId))
-                    deletedLocal++
-                    log.i(TAG, "Quick page removed on server, deleted locally: $pageId")
-                } catch (e: Exception) {
-                    errors.add(DomainError.DatabaseError("Failed to delete quick page $pageId: ${e.message}"))
+        if (!uploadOnly && plan.deleteLocal.isNotEmpty()) {
+            if (looksLikeQuickPageWipe(plan.deleteLocal.size, rows.size)) {
+                // The server appearing to have dropped most of what we uploaded is far more likely
+                // to be our own misreading than an intentional bulk cleanup. Refuse and say so.
+                log.e(
+                    TAG,
+                    "Refusing to delete ${plan.deleteLocal.size} of ${rows.size} quick pages: " +
+                        "that looks like a misread listing, not a server-side cleanup."
+                )
+            } else {
+                for (pageId in plan.deleteLocal) {
+                    try {
+                        // Deleting a note because a *remote* file vanished is the one destructive
+                        // step here, so it is reversible: the page is written out first and can be
+                        // put back by hand from quickpages-deleted/.
+                        backupQuickPage(pageId)
+                        deletePage(appRepository, pageId, context.filesDir)
+                        appRepository.pageSyncStateRepository.deleteByIds(listOf(pageId))
+                        deletedLocal++
+                        log.i(TAG, "Quick page removed on server, deleted locally: $pageId")
+                    } catch (e: Exception) {
+                        errors.add(DomainError.DatabaseError("Failed to delete quick page $pageId: ${e.message}"))
+                    }
                 }
             }
         }
@@ -147,6 +170,20 @@ class QuickPageSyncService @Inject constructor(
         return errors.asResult(Unit)
     }
 
+    /** Write a page's JSON next to the database before it is deleted, so the delete is undoable. */
+    private suspend fun backupQuickPage(pageId: String) {
+        try {
+            val data = appRepository.pageRepository.getWithDataById(pageId) ?: return
+            val dir = File(getDbDir(), "quickpages-deleted")
+            if (!dir.exists()) dir.mkdirs()
+            File(dir, "$pageId.json").writeText(
+                NotebookSerializer.serializePage(data.page, data.strokes, data.images)
+            )
+        } catch (e: Exception) {
+            log.w(TAG, "Could not back up quick page $pageId before deleting: ${e.message}")
+        }
+    }
+
     private fun mimeType(file: File): String = when (file.extension.lowercase()) {
         "jpg", "jpeg" -> "image/jpeg"
         "png" -> "image/png"
@@ -172,21 +209,39 @@ internal data class QuickPageSyncPlan(
 
 internal fun String.jsonName() = "$this.json"
 
-/** Pure planning step (unit-tested): which pages go up, which rows are stale, which pages go. */
+/**
+ * At least this many local deletions, and more than half of everything we ever uploaded, is treated
+ * as a misread listing rather than a real server-side cleanup. Mirrors the notebook side's
+ * [looksLikeStaleStateWipe]; the ordinary "the bridge ingested one or two notes" case stays below it.
+ */
+internal fun looksLikeQuickPageWipe(deletionCount: Int, rowCount: Int): Boolean =
+    deletionCount >= 3 && deletionCount > rowCount / 2
+
+/**
+ * Pure planning step (unit-tested): which pages go up, which rows are stale, which pages go, which
+ * come back.
+ *
+ * [remoteNames] is null when the server listing is unknown (request failed). Local deletion is the
+ * only irreversible outcome here, so it requires positive evidence on every count: a listing we
+ * actually performed, a row proving the page once reached the server, and no local edit since.
+ */
 internal fun planQuickPageSync(
     localPages: List<Page>,
     rows: Map<String, PageSyncState>,
-    remoteNames: Set<String>,
+    remoteNames: Set<String>?,
 ): QuickPageSyncPlan {
     val upload = mutableListOf<Page>()
     val deleteLocal = mutableListOf<String>()
     for (page in localPages) {
         val row = rows[page.id]
+        // No row means the page was never uploaded, so its absence on the server says nothing --
+        // upload it. This is the case that must never turn into a deletion.
         val edited = row == null ||
             page.updatedAt.time - row.syncedLocalUpdatedAt.time > QuickPageSyncService.TOLERANCE_MS
-        when {
-            edited -> upload += page
-            page.id.jsonName() !in remoteNames -> deleteLocal += page.id
+        if (edited) {
+            upload += page
+        } else if (remoteNames != null && page.id.jsonName() !in remoteNames) {
+            deleteLocal += page.id
         }
     }
     val localIds = localPages.mapTo(mutableSetOf()) { it.id }

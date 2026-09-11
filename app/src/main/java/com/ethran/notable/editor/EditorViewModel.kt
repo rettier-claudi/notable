@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -232,9 +233,17 @@ class EditorViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            syncScheduler.immediateSyncActive().collect { active ->
-                _toolbarState.update { it.copy(syncBusy = active) }
-            }
+            syncScheduler.immediateSyncActive()
+                .distinctUntilChanged()
+                .collect { active ->
+                    _toolbarState.update { it.copy(syncBusy = active) }
+                    // The sync button's own state change is invisible otherwise: while drawing is
+                    // enabled the Onyx raw layer covers the panel, so Compose repaints the toolbar
+                    // into a buffer nobody sees until something else unfreezes the screen (opening
+                    // a menu did). That is why pressing sync looked like it did nothing and then
+                    // "fired several times" once a menu was opened -- the syncs had run all along.
+                    repaintToolbar()
+                }
         }
         // The page on screen was replaced by a server download. Right after start/wake-up
         // (the resume sync) the user has not drawn yet: reload silently, so the wake-up sync
@@ -418,10 +427,19 @@ class EditorViewModel @Inject constructor(
             ToolbarAction.NavigateToBugReport -> sendUiEvent(EditorUiEvent.NavigateToBugReport)
             ToolbarAction.NavigateToPages -> handleNavigateToPages()
             ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
-            ToolbarAction.SyncNow -> syncScheduler.triggerImmediateSync()
-            ToolbarAction.SyncAndNotify -> syncWebhookNotifier.syncThenNotify(
-                pageId = _toolbarState.value.pageId, notebookId = bookId
-            )
+            ToolbarAction.SyncNow -> {
+                syncScheduler.triggerImmediateSync()
+                // Acknowledge the press immediately, even if the work is folded into a run that is
+                // already going: without this the button gives no sign it was hit.
+                repaintToolbar()
+            }
+
+            ToolbarAction.SyncAndNotify -> {
+                syncWebhookNotifier.syncThenNotify(
+                    pageId = _toolbarState.value.pageId, notebookId = bookId
+                )
+                repaintToolbar()
+            }
 
             ToolbarAction.CloseAllMenus -> handleCloseAllMenus()
             is ToolbarAction.UpdateQuickNavOpen -> {
@@ -593,6 +611,15 @@ class EditorViewModel @Inject constructor(
     /**
      * Re-evaluates whether drawing should be enabled based on menu and selection states.
      */
+    /**
+     * Push the panel so a toolbar-only state change actually becomes visible on e-ink. Cheap
+     * enough for a button press; not for a stream of state updates, hence the distinctUntilChanged
+     * on the sync-state flow.
+     */
+    private fun repaintToolbar() {
+        viewModelScope.launch { CanvasEventBus.refreshUi.emit(Unit) }
+    }
+
     fun updateDrawingState() {
         // It get called three times on canvas creation.
         val shouldBeDrawing = _toolbarState.value.isDrawingAllowed

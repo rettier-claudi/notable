@@ -53,6 +53,28 @@ class QuickPageSyncPlanTest {
     }
 
     @Test
+    fun an_unknown_server_listing_never_deletes_anything_locally() {
+        // The listing request failed. Absence of knowledge must not read as absence of the file:
+        // this is what deleted quick pages on 2026-09-11.
+        val plan = planQuickPageSync(
+            localPages = listOf(page("uploaded", 10_000)),
+            rows = mapOf("uploaded" to row("uploaded", 10_000)),
+            remoteNames = null,
+        )
+        assertEquals(emptyList<String>(), plan.deleteLocal)
+        assertEquals(emptyList<String>(), plan.upload.map { it.id })
+    }
+
+    @Test
+    fun wipe_guard_trips_on_a_majority_but_not_on_ordinary_cleanup() {
+        // The bridge taking one or two notes must still propagate.
+        assertEquals(false, looksLikeQuickPageWipe(deletionCount = 2, rowCount = 2))
+        assertEquals(false, looksLikeQuickPageWipe(deletionCount = 3, rowCount = 9))
+        // Most of everything we ever uploaded vanishing at once is a misread, not a cleanup.
+        assertEquals(true, looksLikeQuickPageWipe(deletionCount = 5, rowCount = 6))
+    }
+
+    @Test
     fun page_deleted_on_device_is_deleted_on_server() {
         val plan = planQuickPageSync(
             localPages = emptyList(),
