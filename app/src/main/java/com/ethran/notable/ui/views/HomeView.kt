@@ -73,11 +73,19 @@ import com.ethran.notable.ui.noRippleClickable
 import com.ethran.notable.ui.viewmodels.LibraryUiState
 import com.ethran.notable.ui.viewmodels.LibraryViewModel
 import compose.icons.FeatherIcons
+import compose.icons.feathericons.AlertTriangle
+import compose.icons.feathericons.Check
 import compose.icons.feathericons.FilePlus
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.FolderPlus
+import compose.icons.feathericons.RefreshCw
 import compose.icons.feathericons.Settings
 import compose.icons.feathericons.Upload
+import com.ethran.notable.sync.SyncState
+import com.ethran.notable.ui.viewmodels.HomeSyncStatus
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import io.shipbook.shipbooksdk.ShipBook
 
 
@@ -102,6 +110,7 @@ fun Library(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val newlyCreatedBookId by viewModel.newlyCreatedBookId.collectAsStateWithLifecycle()
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
 
     LaunchedEffect(folderId) {
         viewModel.loadFolder(folderId)
@@ -127,6 +136,8 @@ fun Library(
         exportEngine = viewModel.exportEngine,
         syncScheduler = viewModel.syncScheduler,
         uiState = uiState,
+        syncStatus = syncStatus,
+        onSyncNow = viewModel::onSyncNow,
         onNavigateToFolder = { id -> navController.navigate(LibraryDestination.createRoute(id)) },
         onNavigateToSettings = { navController.navigate("settings") },
         onNavigateToEditor = { pageId, bookId ->
@@ -152,6 +163,8 @@ fun LibraryContent(
     exportEngine: ExportEngine,
     syncScheduler: SyncScheduler,
     uiState: LibraryUiState,
+    syncStatus: HomeSyncStatus = HomeSyncStatus(),
+    onSyncNow: () -> Unit = {},
     onNavigateToFolder: (String?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToEditor: (String, String) -> Unit,
@@ -166,7 +179,8 @@ fun LibraryContent(
 ) {
     Column(Modifier.fillMaxSize()) {
         Topbar {
-            Row(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow)
                 Spacer(modifier = Modifier.weight(1f))
                 BadgedBox(
                     badge = {
@@ -232,6 +246,61 @@ fun LibraryContent(
     }
 
 
+}
+
+/**
+ * Sync indicator + button on the home screen: state of the engine, time of the last successful
+ * sync, unsynced/conflicted notebook counts. Tapping it starts a sync (or a retry after an error);
+ * while a sync runs the tap does nothing. Hidden while sync is disabled.
+ */
+@Composable
+fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
+    if (!status.enabled) return
+    val state = status.state
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val timeLabel = status.lastSyncTime?.let {
+        val now = java.util.Calendar.getInstance()
+        val then = java.util.Calendar.getInstance().apply { timeInMillis = it }
+        val sameDay = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+            now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)
+        val pattern = if (sameDay) "HH:mm" else "dd.MM. HH:mm"
+        java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(it))
+    }
+
+    val (icon: ImageVector, text: String) = when {
+        state is SyncState.Syncing -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_syncing)
+        state is SyncState.Error -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_failed)
+        status.conflictCount > 0 -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_conflict)
+        status.pendingCount > 0 -> FeatherIcons.RefreshCw to
+            stringResource(R.string.home_sync_pending, status.pendingCount)
+        timeLabel != null -> FeatherIcons.Check to stringResource(R.string.home_sync_synced_at, timeLabel)
+        else -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_never)
+    }
+    val syncing = state is SyncState.Syncing
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+            .border(0.5.dp, Color.Black)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .noRippleClickable(onClick = { if (!syncing) onSyncNow() })
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "Sync",
+            tint = Color.Black,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(220.dp)
+        )
+    }
 }
 
 @Composable

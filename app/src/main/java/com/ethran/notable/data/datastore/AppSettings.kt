@@ -42,6 +42,9 @@ data class AppSettings(
     val scribbleToEraseEnabled: Boolean = false,
     val toolbarPosition: Position = Position.Top,
     val smoothScroll: Boolean = true,
+    // Fixed pages: no vertical/horizontal scrolling of the canvas at 100% zoom. Panning is still
+    // allowed while zoomed so the visible part of a zoomed page can be chosen.
+    val disableScrolling: Boolean = false,
     val continuousZoom: Boolean = false,
     val continuousStrokeSlider: Boolean = false,
     val paginatePdf: Boolean = true,
@@ -69,6 +72,9 @@ data class AppSettings(
     // same SystemUI pipeline serves the side/bottom edge navigation swipes, so those
     // stop working inside the app while this is on — hence opt-in.
     val blockSystemGestures: Boolean = false,
+    // Hardware page-turn keys (Volume up/down, Page up/down, D-pad) switch pages in the editor.
+    // Onyx side-swipe "system gestures" mapped to page turn / volume arrive as these key codes too.
+    val pageTurnKeys: Boolean = true,
     val renameOnCreate: Boolean = true,
 
     // Debug

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,7 +41,9 @@ import com.ethran.notable.data.db.KvProxy
 import com.ethran.notable.data.db.StrokeMigrationHelper
 import com.ethran.notable.editor.canvas.CanvasEventBus
 import com.ethran.notable.editor.utils.DeviceCompat
+import com.ethran.notable.gestures.pageTurnDirectionForKey
 import com.ethran.notable.io.ExportEngine
+import com.ethran.notable.sync.ForegroundSyncController
 import com.ethran.notable.sync.SyncScheduler
 import com.ethran.notable.ui.AppEventUiBridge
 import com.ethran.notable.ui.LocalSnackContext
@@ -96,6 +99,9 @@ class MainActivity : ComponentActivity() {
     lateinit var syncScheduler: dagger.Lazy<SyncScheduler>
 
     @Inject
+    lateinit var foregroundSync: dagger.Lazy<ForegroundSyncController>
+
+    @Inject
     lateinit var snackDispatcher: SnackDispatcher
 
     @Inject
@@ -122,6 +128,7 @@ class MainActivity : ComponentActivity() {
         SCREEN_HEIGHT = applicationContext.resources.displayMetrics.heightPixels
 
         trackSystemGestureBlocking()
+        trackForegroundSync()
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -215,10 +222,31 @@ class MainActivity : ComponentActivity() {
                 val settings = kvProxy.get().getSyncSettings()
                 if (settings.syncEnabled && settings.syncOnAppStart) {
                     Log.i(TAG, "Triggering one-time sync on app startup via WorkManager")
-                    syncScheduler.get().triggerImmediateSync()
+                    foregroundSync.get().requestSync("app start")
                 }
             } catch (e: Exception) {
                 Log.i(TAG, "Initial sync setup failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Foreground sync: a sync request whenever the activity resumes (first resume included --
+     * the controller's rate limit folds it into the app-start sync) and a periodic poll that only
+     * runs while RESUMED, so nothing keeps the radio busy while the tablet sleeps.
+     */
+    private fun trackForegroundSync() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                if (!hasUsableStorage(this@MainActivity)) return@repeatOnLifecycle
+                try {
+                    foregroundSync.get().onAppResumed()
+                    foregroundSync.get().pollWhileResumed()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Foreground sync stopped: ${e.message}")
+                }
             }
         }
     }
@@ -267,6 +295,34 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             CanvasEventBus.onFocusChange.emit(true)
         }
+    }
+
+    // Hardware page-turn keys (volume / page up-down / d-pad, also what Onyx's system
+    // side-swipe gestures deliver). Consumed only while an editor is open and the setting is on,
+    // so the keys keep their normal meaning in the library and in other apps.
+    private fun consumePageTurnKey(keyCode: Int, isDown: Boolean): Boolean {
+        if (!GlobalAppSettings.current.pageTurnKeys) return false
+        val direction = pageTurnDirectionForKey(keyCode) ?: return false
+        if (CanvasEventBus.pageTurnKey.subscriptionCount.value == 0) return false
+        // Act on the down event only, but swallow the matching up event as well so the system
+        // does not still change the volume on key release.
+        if (isDown) CanvasEventBus.pageTurnKey.tryEmit(direction)
+        return true
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Auto-repeat while holding a key would flip through the whole notebook.
+        if (event != null && event.repeatCount > 0 && pageTurnDirectionForKey(keyCode) != null &&
+            CanvasEventBus.pageTurnKey.subscriptionCount.value > 0 &&
+            GlobalAppSettings.current.pageTurnKeys
+        ) return true
+        if (consumePageTurnKey(keyCode, isDown = true)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (consumePageTurnKey(keyCode, isDown = false)) return true
+        return super.onKeyUp(keyCode, event)
     }
 
     // Onyx SystemUI's TouchInteractionService swallows multi-finger touches for its

@@ -53,6 +53,42 @@ A maintained and customized fork of the archived [olup/notable](https://github.c
 
 ---
 
+
+## This fork (rettier-claudi/notable)
+
+Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the other end writes
+notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
+the `upstream` remote and merged in as it moves.
+
+- **Fixed pages** — *Settings → General → "Fixed pages — disable scrolling"*: the canvas never
+  moves at 100 % zoom (no drag scroll, no flick, no scroll indicators). Panning stays possible
+  while zoomed so a zoomed page remains reachable.
+- **Physical buttons / system gestures turn pages** — *Settings → Gestures → "Physical buttons
+  turn pages"* (on by default): Volume up/down, Page up/down and D-pad keys go to the previous/next
+  page while a notebook is open. On Boox, map a system side-swipe gesture to "page turn" or
+  "volume" and it lands here as one of these keys. Keys keep their normal meaning in the library.
+- **Sync when the app comes back to the foreground** — *Settings → Sync*: a full sync on every
+  resume (device wake-up, app switch), rate-limited to one request per 30 s and skipped offline.
+  Previously only a fresh app start synced, so a tablet that merely woke up never pulled changes.
+- **Sync while in use every N minutes** (default 2, Off/1/2/5/10/15/30): a foreground poll that
+  only runs while Notable is on screen. The ≥ 15 min WorkManager job stays the background fallback.
+- **Sync indicator and button on the home screen**: state of the engine, time of the last
+  successful sync, count of notebooks with unsynced edits or conflicts. Tap = "Sync now" / retry.
+- Sync bug fixes found with a server-side writer:
+  - A notebook downloaded in a sync run was tombstoned and deleted from the server one second
+    later (`detectAndUploadLocalDeletions` compared sync-state rows against the pre-download
+    snapshot only) and then re-uploaded by the next run.
+  - Synced image backgrounds rendered white: the relative name stored by sync was opened as-is.
+    Relative names now resolve against the managed `backgrounds/` folder.
+  - Synced image elements ("cannot load PNG"): sync stores a plain absolute path, which the
+    content resolver cannot open. Scheme-less paths are decoded straight from the file.
+  - Sync log keeps 300 lines instead of 50.
+
+Build: `./gradlew assembleRelease` with `STORE_FILE`/`STORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`
+set (own keystore; the APK is not installable over the upstream build, uninstall that first —
+notebooks live in `Documents/notabledb` and survive, sync credentials must be re-entered).
+Releases: https://github.com/rettier-claudi/notable/releases
+
 ## About This Fork
 This project began as a fork of the original Notable app and has since evolved into a continuation of it. The architecture is largely the same, but many of the functions have been rewritten and expanded with a focus on practical, everyday use. Development is active when possible, guided by the principle that the app must be fast and dependable — performance comes first, and the basics need to feel right before new features are introduced. Waiting for things to load is seen as unacceptable, so responsiveness is a core priority.
 

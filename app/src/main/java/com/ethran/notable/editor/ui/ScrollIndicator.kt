@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ethran.notable.data.datastore.GlobalAppSettings
 import com.ethran.notable.editor.EditorViewModel
 import com.ethran.notable.editor.PageView
 import com.ethran.notable.ui.convertDpToPixel
@@ -29,6 +30,7 @@ import kotlin.math.max
  */
 @Composable
 fun ScrollIndicator(viewModel: EditorViewModel, page: PageView) {
+    if (GlobalAppSettings.current.disableScrolling) return
     val toolbarState by viewModel.toolbarState.collectAsStateWithLifecycle()
     BoxWithConstraints(
         modifier = Modifier
@@ -66,6 +68,7 @@ fun ScrollIndicator(viewModel: EditorViewModel, page: PageView) {
  */
 @Composable
 fun HorizontalScrollIndicator(viewModel: EditorViewModel, page: PageView) {
+    if (GlobalAppSettings.current.disableScrolling) return
     val toolbarState by viewModel.toolbarState.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         Spacer(Modifier.weight(1f))

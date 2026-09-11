@@ -89,6 +89,8 @@ and time if necessary.
 | **Sync Now** | Runs a full sync. "Last synced" changes only after the entire run succeeds. Other notebooks can still transfer if one fails. |
 | **Auto sync every … minutes** | Schedules background sync every 15–240 minutes. Android may delay it for battery or network reasons. |
 | **Sync on app start** | Schedules a full sync when Notable's main screen starts. |
+| **Sync when the app comes back to the foreground** | Schedules a full sync when Notable resumes after the device slept or you switched apps. At most one request per 30 seconds, skipped while offline. |
+| **Sync while in use every … minutes** | Foreground poll: while Notable is on screen, a full sync every 1–30 minutes (Off = never). Nothing runs while the device sleeps; the auto sync above stays the background fallback. A round with no changes is one directory listing plus a few conditional requests. |
 | **Sync when closing notes** | Syncs only the notebook you closed. It skips the attempt if another sync holds the lock. |
 | **Check for newer version when opening a notebook** | Checks the remote manifest and offers **Sync now** when it is newer. Network and authentication errors do not block opening the notebook. |
 | **Wi-Fi only** | Requires a network Android reports as unmetered, usually Wi-Fi or Ethernet. |

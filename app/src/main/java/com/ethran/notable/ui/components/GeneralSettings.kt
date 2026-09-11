@@ -47,6 +47,13 @@ fun GeneralSettings(
             })
 
         SettingToggleRow(
+            label = stringResource(R.string.disable_scrolling),
+            value = settings.disableScrolling,
+            onToggle = { isChecked ->
+                onSettingsChange(settings.copy(disableScrolling = isChecked))
+            })
+
+        SettingToggleRow(
             label = stringResource(R.string.continuous_zoom),
             value = settings.continuousZoom,
             onToggle = { isChecked ->

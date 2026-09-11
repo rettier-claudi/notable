@@ -17,6 +17,7 @@
 
     <string name="enable_scribble_to_erase">Zamaż aby usunąć</string>
     <string name="enable_smooth_scrolling">Włącz płynne przewijanie</string>
+    <string name="disable_scrolling">Stałe strony — wyłącz przewijanie (płótno nie przesuwa się przy 100% powiększenia)</string>
     <string name="continuous_zoom">Włącz płynne przybliżanie</string>
     <string name="continuous_stroke_slider">Płynny regulator grubości kreski</string>
     <string name="rename_on_create">Otwórz ustawienia notatknika przy tworzeniu nowego</string>
@@ -43,6 +44,7 @@
     <string name="gesture_action_toggle_zen_mode">Przełącz tryb Zen</string>
 
     <string name="enable_quick_nav">Przeciągnij trzema palcami w górę aby pokazać QuickNav</string>
+    <string name="page_turn_keys">Fizyczne przyciski zmieniają strony — klawisze głośności, Page Up/Down i D-pad (także to, co wysyłają systemowe gesty przewracania stron) przełączają strony przy otwartym zeszycie</string>
     <string name="block_system_gestures">Blokuj gesty systemowe w Notable — naprawia gesty trzema palcami przy włączonym systemowym zrzucie ekranu, ale krawędziowe gesty nawigacji przestaną działać w aplikacji</string>
     <string name="work_in_progress">(w trakcie implementacji)</string>
     <string name="toolbar_position_top">Góra</string>
@@ -281,4 +283,15 @@
     <string name="toolbar_element_menu">Menu</string>
     <string name="toolbar_element_divider">Separator</string>
 
+    <string name="sync_on_resume_label">Synchronizuj po powrocie aplikacji na pierwszy plan (wybudzenie, przełączenie aplikacji)</string>
+    <string name="sync_foreground_interval_label">Synchronizuj podczas używania co</string>
+    <string name="sync_foreground_interval_off">Wył.</string>
+    <string name="sync_foreground_interval_hint">Działa tylko, gdy Notable jest na ekranie — nic podczas snu urządzenia. Runda bez zmian to jedno listowanie katalogu i kilka warunkowych zapytań.</string>
+    <string name="home_sync_syncing">Synchronizacja…</string>
+    <string name="home_sync_failed">Synchronizacja nieudana — dotknij, aby ponowić</string>
+    <string name="home_sync_synced_at">Zsynchronizowano %1$s</string>
+    <string name="home_sync_never">Jeszcze nie synchronizowano — dotknij, aby zsynchronizować</string>
+    <string name="home_sync_pending">%1$d niezsynchronizowane</string>
+    <string name="home_sync_conflict">Konflikt — zobacz zeszyt</string>
+    <string name="home_sync_offline">Offline</string>
 </resources>

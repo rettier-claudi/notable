@@ -232,7 +232,9 @@ private fun applyModeTransitions(recognizer: Recognizer, ctx: GestureContext) {
         )
         ctx.actions.showHint("Selection mode!")
     }
-    if (ctx.appSettings.smoothScroll && shouldEnterScroll(tracker, recognizer.mode, ctx.thresholds))
+    if (ctx.appSettings.smoothScroll && !ctx.appSettings.disableScrolling &&
+        shouldEnterScroll(tracker, recognizer.mode, ctx.thresholds)
+    )
         applyGestureMode(recognizer, GestureMode.Scroll, ctx)
     if (shouldEnterTransform(
             tracker,
@@ -384,6 +386,10 @@ private fun dispatchEvent(event: GestureEvent, ctx: GestureContext) {
         }
 
         is GestureEvent.VerticalScroll -> {
+            if (ctx.appSettings.disableScrolling) {
+                log.d("Discrete scrolling ignored: scrolling disabled in settings")
+                return
+            }
             log.d("Discrete scrolling, verticalDrag: ${event.delta}")
             ctx.actions.requestScroll(Offset(0f, event.delta))
         }

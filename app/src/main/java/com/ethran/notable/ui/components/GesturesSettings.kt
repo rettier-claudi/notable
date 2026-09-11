@@ -39,6 +39,13 @@ fun GesturesSettings(
                 onSettingsChange(settings.copy(enableQuickNav = isChecked))
             })
 
+        SettingToggleRow(
+            label = stringResource(R.string.page_turn_keys),
+            value = settings.pageTurnKeys,
+            onToggle = { isChecked ->
+                onSettingsChange(settings.copy(pageTurnKeys = isChecked))
+            })
+
         if (DeviceCompat.isOnyxDevice) {
             SettingToggleRow(
                 label = stringResource(R.string.block_system_gestures),

@@ -375,6 +375,23 @@ private fun SyncBehaviorSection(
                 onToggle = { onUpdate(state.syncSettings.copy(syncOnAppStart = it), true) }
             )
             SettingToggleRow(
+                label = stringResource(R.string.sync_on_resume_label),
+                value = state.syncSettings.syncOnResume,
+                onToggle = { onUpdate(state.syncSettings.copy(syncOnResume = it), true) }
+            )
+            ForegroundSyncIntervalSelector(
+                intervalMinutes = state.syncSettings.foregroundSyncIntervalMinutes,
+                onIntervalChanged = {
+                    onUpdate(state.syncSettings.copy(foregroundSyncIntervalMinutes = it), true)
+                }
+            )
+            Text(
+                text = stringResource(R.string.sync_foreground_interval_hint),
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
+            )
+            SettingToggleRow(
                 label = stringResource(R.string.sync_check_on_open_label),
                 value = state.syncSettings.checkOnOpen,
                 onToggle = { onUpdate(state.syncSettings.copy(checkOnOpen = it), true) }
@@ -794,6 +811,55 @@ private fun SyncIntervalSelector(
             text = "+",
             onClick = { onIntervalChanged((intervalMinutes + stepMinutes).coerceAtMost(maxInterval)) },
             enabled = intervalMinutes < maxInterval,
+            isSecondary = true
+        )
+    }
+}
+
+/** Steps for the foreground poll; 0 = off. */
+private val FOREGROUND_INTERVAL_STEPS = listOf(0, 1, 2, 5, 10, 15, 30)
+
+@Composable
+private fun ForegroundSyncIntervalSelector(
+    intervalMinutes: Int,
+    onIntervalChanged: (Int) -> Unit,
+) {
+    val index = FOREGROUND_INTERVAL_STEPS.indexOfFirst { it >= intervalMinutes }
+        .let { if (it < 0) FOREGROUND_INTERVAL_STEPS.lastIndex else it }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.sync_foreground_interval_label),
+            style = MaterialTheme.typography.body2,
+            color = MaterialTheme.colors.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+
+        EInkActionButton(
+            text = "-",
+            onClick = { onIntervalChanged(FOREGROUND_INTERVAL_STEPS[index - 1]) },
+            enabled = index > 0,
+            isSecondary = true
+        )
+
+        Text(
+            text = if (intervalMinutes <= 0) stringResource(R.string.sync_foreground_interval_off)
+            else stringResource(R.string.sync_interval_value, intervalMinutes),
+            style = MaterialTheme.typography.body2,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colors.onSurface
+        )
+
+        EInkActionButton(
+            text = "+",
+            onClick = { onIntervalChanged(FOREGROUND_INTERVAL_STEPS[index + 1]) },
+            enabled = index < FOREGROUND_INTERVAL_STEPS.lastIndex,
             isSecondary = true
         )
     }

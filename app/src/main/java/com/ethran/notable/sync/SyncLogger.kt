@@ -11,7 +11,7 @@ import java.util.Locale
  * Logger that maintains recent sync log messages for display in UI.
  */
 object SyncLogger {
-    private const val MAX_LOGS = 50
+    private const val MAX_LOGS = 300
 
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()

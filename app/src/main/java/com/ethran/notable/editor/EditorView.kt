@@ -178,6 +178,14 @@ fun EditorView(
             }
         }
 
+        // Hardware page-turn keys / Onyx system page-turn gestures (emitted by MainActivity).
+        LaunchedEffect(Unit) {
+            CanvasEventBus.pageTurnKey.collect { direction ->
+                if (direction > 0) editorControlTower.goToNextPage()
+                else editorControlTower.goToPreviousPage()
+            }
+        }
+
         // Handle Canvas signals in UI
         LaunchedEffect(Unit) {
             CanvasEventBus.closeMenusSignal.collect {

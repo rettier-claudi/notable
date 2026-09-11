@@ -21,14 +21,14 @@ class SyncLoggerTest {
     fun log_capped_to_max_entries_and_preserves_tail() {
         SyncLogger.clear()
 
-        for (i in 0 until 55) {
+        for (i in 0 until 305) {
             SyncLogger.i("sync", "message-$i")
         }
 
         val logs = SyncLogger.logs.value
-        assertEquals(50, logs.size)
+        assertEquals(300, logs.size)
         assertEquals("message-5", logs.first().message)
-        assertEquals("message-54", logs.last().message)
+        assertEquals("message-304", logs.last().message)
     }
 
     @Test

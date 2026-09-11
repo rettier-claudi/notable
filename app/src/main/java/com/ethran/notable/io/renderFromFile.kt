@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.ethran.notable.SCREEN_WIDTH
 import com.ethran.notable.data.datastore.GlobalAppSettings
+import com.ethran.notable.data.ensureBackgroundsFolder
 import com.ethran.notable.utils.Timing
 import com.ethran.notable.utils.ensureNotMainThread
 import io.shipbook.shipbooksdk.ShipBook
@@ -31,8 +32,14 @@ fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
         // Obtain the content resolver from the context
         val contentResolver: ContentResolver = context.contentResolver
 
-        // Since the minimum SDK is 29, we can directly use ImageDecoder to decode the Bitmap
-        val source = ImageDecoder.createSource(contentResolver, uri)
+        // Since the minimum SDK is 29, we can directly use ImageDecoder to decode the Bitmap.
+        // Synced images are stored as a plain absolute path (no scheme); the content resolver
+        // cannot open those ("No content provider"), so decode them straight from the file.
+        val source = if (uri.scheme == null && !uri.path.isNullOrEmpty()) {
+            ImageDecoder.createSource(File(uri.path!!))
+        } else {
+            ImageDecoder.createSource(contentResolver, uri)
+        }
         ImageDecoder.decodeBitmap(source)
     } catch (e: SecurityException) {
         log.e("SecurityException: ${e.message}", e)
@@ -47,12 +54,24 @@ fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
 }
 
 
+/**
+ * A page's `background` is either an absolute path (locally chosen file, linked PDF) or a name
+ * relative to the managed backgrounds folder -- which is what WebDAV sync stores and uploads
+ * (`image/foo.png`, or just `foo.png` for a notebook created on the server). Relative names used
+ * to be opened as-is, which never exists, so synced image backgrounds rendered white.
+ */
+fun resolveBackgroundFile(filePath: String): File {
+    val direct = File(filePath)
+    if (direct.isAbsolute) return direct
+    return File(ensureBackgroundsFolder(), filePath)
+}
+
 fun loadBackgroundBitmap(filePath: String, pageNumber: Int, scale: Float): Bitmap? {
     // TODO: it's very slow, needs to be changed for better tool
     if (filePath.isEmpty()) return null
     ensureNotMainThread("loadBackgroundBitmap")
     log.v("Reloading background, path: $filePath, scale: $scale")
-    val file = File(filePath)
+    val file = resolveBackgroundFile(filePath)
     if (!file.exists()) {
         log.v("getOrLoadBackground: File does not exist at path: $filePath")
         return null
@@ -80,7 +99,7 @@ fun loadBackgroundBitmap(filePath: String, pageNumber: Int, scale: Float): Bitma
     timer.step("start android Pdf")
     log.d("Rendering using ${if (GlobalAppSettings.current.muPdfRendering) "MuPdf" else "Android Pdf"}")
     val newBitmap: Bitmap? = if (GlobalAppSettings.current.muPdfRendering)
-        renderPdfPageMuPdf(filePath, pageNumber, targetWidth.toInt(), resolutionModifier = 1.5f)
+        renderPdfPageMuPdf(file.absolutePath, pageNumber, targetWidth.toInt(), resolutionModifier = 1.5f)
     else
         renderPdfPageAndroid(file, pageNumber, targetWidth.toInt(), resolutionModifier = 1.2f)
     timer.end("loaded background")

@@ -60,6 +60,11 @@ object CanvasEventBus {
 
     val changePage = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
+    // Hardware page-turn keys (see gestures/PageTurnKeys.kt): +1 next page, -1 previous page.
+    // MainActivity emits only while an editor is collecting (subscriptionCount > 0), so keys
+    // keep their system meaning (e.g. volume) everywhere else.
+    val pageTurnKey = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+
 
     suspend fun waitForDrawing() {
         Log.d(

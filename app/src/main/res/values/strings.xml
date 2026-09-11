@@ -17,6 +17,7 @@
     <string name="hexagon_grid">Hexagon grid</string>
     <string name="enable_scribble_to_erase">Enable scribble-to-erase (scribble out your mistakes to erase them)</string>
     <string name="enable_smooth_scrolling">Enable smooth scrolling</string>
+    <string name="disable_scrolling">Fixed pages — disable scrolling (the canvas never moves at 100% zoom)</string>
     <string name="continuous_zoom">Continuous Zoom</string>
     <string name="continuous_stroke_slider">Continuous Stroke Slider</string>
     <string name="rename_on_create">Open properties on new notebook</string>
@@ -33,6 +34,7 @@
     <string name="gestures_three_finger_swipe_left_action">Three Finger Swipe Left Action</string>
     <string name="gestures_three_finger_swipe_right_action">Three Finger Swipe Right Action</string>
     <string name="enable_quick_nav">Swipe up with three fingers to open QuickNav</string>
+    <string name="page_turn_keys">Physical buttons turn pages — Volume, Page Up/Down and D-pad keys (also what the system page-turn gestures send) switch pages while a notebook is open</string>
     <string name="block_system_gestures">Block system gestures while in Notable — fixes three-finger gestures when the system screenshot gesture is on, but edge navigation swipes stop working in the app</string>
     <string name="work_in_progress">(work in progress)</string>
     <string name="toolbar_position_top">Top</string>
@@ -129,6 +131,17 @@
     <string name="sync_wifi_only_label">Sync on WiFi only (no mobile data)</string>
     <string name="sync_on_app_start_label">Sync when the app starts</string>
     <string name="sync_check_on_open_label">Check for a newer version when opening a notebook</string>
+    <string name="sync_on_resume_label">Sync when the app comes back to the foreground (wake-up, app switch)</string>
+    <string name="sync_foreground_interval_label">Sync while in use every</string>
+    <string name="sync_foreground_interval_off">Off</string>
+    <string name="sync_foreground_interval_hint">Runs only while Notable is on screen — nothing while the device sleeps. A round with no changes is one directory listing plus a few conditional requests.</string>
+    <string name="home_sync_syncing">Syncing…</string>
+    <string name="home_sync_failed">Sync failed — tap to retry</string>
+    <string name="home_sync_synced_at">Synced %1$s</string>
+    <string name="home_sync_never">Not synced yet — tap to sync</string>
+    <string name="home_sync_pending">%1$d not synced</string>
+    <string name="home_sync_conflict">Conflict — see notebook</string>
+    <string name="home_sync_offline">Offline</string>
     <string name="sync_download_only_label">Download only (never push local changes)</string>
     <string name="sync_upload_only_label">Upload only (skip remote changes)</string>
     <string name="sync_upload_only_hint">Pushes local changes to the server but never downloads. It never overwrites a newer copy on the server and never modifies your local notebooks — notebooks that are newer on the server are just left as they are on this device.</string>

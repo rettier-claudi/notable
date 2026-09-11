@@ -84,6 +84,9 @@ class EditorControlTower(
     override fun requestScroll(delta: Offset) {
         if (delta == Offset.Zero) return
         if (!page.isTransformationAllowed) return
+        // Fixed pages: the canvas never moves at 100% zoom, whatever gesture asked for it.
+        // Zoomed in/out the pan stays possible, otherwise parts of the page become unreachable.
+        if (GlobalAppSettings.current.disableScrolling && page.zoomLevel.value == 1f) return
         pendingScroll.update { it + delta }
     }
 

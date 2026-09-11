@@ -64,6 +64,19 @@ internal fun selectNewRemoteNotebookIds(
     .filter { it !in tombstonedIds }
     .filter { downloadOnly || it !in syncedNotebookIds }
 
+/**
+ * Select notebooks that were deleted on this device: recorded as synced, but absent both before
+ * this run's download step and now. A notebook downloaded *during* this run has a sync-state row
+ * and is missing from the pre-download snapshot, yet it exists locally now -- without the
+ * [currentLocalNotebookIds] check every freshly downloaded notebook was tombstoned and deleted
+ * from the server one second after arriving (then re-uploaded by the next run).
+ */
+internal fun selectLocallyDeletedNotebookIds(
+    syncedNotebookIds: Set<String>,
+    preDownloadNotebookIds: Set<String>,
+    currentLocalNotebookIds: Set<String>,
+): Set<String> = syncedNotebookIds - preDownloadNotebookIds - currentLocalNotebookIds
+
 @Singleton
 class NotebookSyncService @Inject constructor(
     private val appRepository: AppRepository,
@@ -203,9 +216,16 @@ class NotebookSyncService @Inject constructor(
         client: WebDAVClient, preDownloadNotebookIds: Set<String>
     ): AppResult<Int, DomainError> {
         log.i(TAG, "Detecting local deletions...")
-        // A notebook we recorded as synced but that is no longer local was deleted here.
+        // A notebook we recorded as synced but that is no longer local was deleted here. Compare
+        // against the notebooks present *now* as well: the download step that ran just before
+        // this created sync-state rows for notebooks that were not in the pre-download snapshot.
         val syncedIds = appRepository.notebookSyncStateRepository.getAllIds()
-        val deletedLocally = syncedIds - preDownloadNotebookIds
+        val currentLocalIds = appRepository.bookRepository.getAll().map { it.id }.toSet()
+        val deletedLocally = selectLocallyDeletedNotebookIds(
+            syncedNotebookIds = syncedIds,
+            preDownloadNotebookIds = preDownloadNotebookIds,
+            currentLocalNotebookIds = currentLocalIds,
+        )
         val errors = ErrorAccumulator()
 
         // Safety guard: distinguish a real bulk delete from a stale-state divergence. If the local

@@ -16,6 +16,14 @@ data class SyncSettings(
     val syncOnNoteClose: Boolean = true,
     /** Run a full sync when the app starts. */
     val syncOnAppStart: Boolean = true,
+    /** Run a full sync when the app comes back to the foreground (device wake-up, app switch). */
+    val syncOnResume: Boolean = true,
+    /**
+     * While the app is in the foreground, sync every N minutes (0 = off). Cheap when nothing
+     * changed (one directory listing plus conditional manifest GETs) and it never runs while the
+     * device sleeps; the >= 15 min WorkManager job stays the background fallback.
+     */
+    val foregroundSyncIntervalMinutes: Int = 2,
     /** When opening a notebook, check whether the server has a newer version and hint the user. */
     val checkOnOpen: Boolean = true,
     val wifiOnly: Boolean = false,

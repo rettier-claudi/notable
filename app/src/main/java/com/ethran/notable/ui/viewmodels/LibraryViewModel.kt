@@ -22,9 +22,13 @@ import com.ethran.notable.ui.SnackDispatcher
 import com.ethran.notable.utils.fold
 import com.ethran.notable.utils.isLatestVersion
 import com.ethran.notable.data.events.AppEventBus
+import com.ethran.notable.data.db.KvProxy
 import com.ethran.notable.sync.NotebookSyncStatusStore
 import com.ethran.notable.sync.SyncBadge
+import com.ethran.notable.sync.SyncProgressReporter
+import com.ethran.notable.sync.SyncRequest
 import com.ethran.notable.sync.SyncScheduler
+import com.ethran.notable.sync.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +38,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,6 +52,17 @@ data class LibraryUiState(
     val books: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
     val syncBadges: Map<String, SyncBadge> = emptyMap()
+)
+
+/** What the home screen's sync chip shows; a pure function of engine state, settings and badges. */
+data class HomeSyncStatus(
+    val enabled: Boolean = false,
+    val state: SyncState = SyncState.Idle,
+    val lastSyncTime: Long? = null,
+    /** Notebooks with local edits not yet on the server. */
+    val pendingCount: Int = 0,
+    /** Notebooks whose last sync ended in a conflict or error. */
+    val conflictCount: Int = 0,
 )
 
 // Private data class for clean Flow combining
@@ -69,6 +85,8 @@ class LibraryViewModel @Inject constructor(
     private val snackDispatcher: SnackDispatcher,
     val syncScheduler: SyncScheduler,
     private val syncStatusStore: NotebookSyncStatusStore,
+    private val syncProgressReporter: SyncProgressReporter,
+    private val kvProxy: KvProxy,
     @param:ApplicationContext private val context: Context // Kept strictly for ImportEngine
 ) : ViewModel() {
 
@@ -118,6 +136,43 @@ class LibraryViewModel @Inject constructor(
         initialValue = LibraryUiState()
     )
 
+
+    // Home-screen sync chip. Settings are re-read on every engine state change (the orchestrator
+    // persists lastSyncTime right after reporting success) and on each subscription, so toggling
+    // sync in settings shows up when coming back to the library.
+    private val _syncSettingsFlow = syncProgressReporter.state.map { state ->
+        val settings = try {
+            kvProxy.getSyncSettings()
+        } catch (e: Exception) {
+            null
+        }
+        val stored = settings?.lastSyncTime
+        // A just-finished run may not have been persisted yet: fall back to "now".
+        val last = if (state is SyncState.Success) maxOf(stored ?: 0L, System.currentTimeMillis())
+        else stored
+        Triple(settings?.syncEnabled == true, state, last)
+    }
+
+    val syncStatus: StateFlow<HomeSyncStatus> = combine(
+        _syncSettingsFlow, syncStatusStore.badges
+    ) { (enabled, state, last), badges ->
+        HomeSyncStatus(
+            enabled = enabled,
+            state = state,
+            lastSyncTime = last,
+            pendingCount = badges.values.count { it == SyncBadge.NOT_SYNCED },
+            conflictCount = badges.values.count { it == SyncBadge.CONFLICT || it == SyncBadge.ERROR },
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = HomeSyncStatus()
+    )
+
+    /** Home-screen "sync now": the same WorkManager funnel as the settings button. */
+    fun onSyncNow() {
+        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll)
+    }
 
     init {
         // Run network/heavy checks in the background
