@@ -1,6 +1,7 @@
 package com.ethran.notable.sync
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import com.ethran.notable.data.AppRepository
 import com.ethran.notable.data.db.KvProxy
@@ -1220,7 +1221,7 @@ class NotebookSyncService @Inject constructor(
                 val filename = extractFilename(image.uri)
                 val localFile = File(ensureImagesFolder(), filename)
 
-                if (!localFile.exists()) {
+                if (!isUsableMediaFile(localFile)) {
                     client.getFile(
                         SyncPaths.imageFile(notebookId, filename),
                         localFile
@@ -1246,7 +1247,7 @@ class NotebookSyncService @Inject constructor(
             } else {
                 attemptedBackgrounds.add(filename)
                 val localFile = File(ensureBackgroundsFolder(), filename)
-                if (!localFile.exists()) {
+                if (!isUsableMediaFile(localFile)) {
                     localFile.parentFile?.mkdirs()
                     // Remote path uses the basename (flat), matching how upload stores it.
                     val remoteName = File(filename).name
@@ -1345,6 +1346,23 @@ class NotebookSyncService @Inject constructor(
     }
 
     private fun extractFilename(uri: String): String = uri.substringAfterLast('/')
+
+    /**
+     * Whether a media file already on disk can be used instead of re-downloading it. The media
+     * folders are device-wide (not per notebook), so the same name may have been fetched for an
+     * earlier notebook; a leftover that is empty or not decodable (interrupted write, older app
+     * version) must not block the download forever -- that showed up as a white background that
+     * the log said had been "downloaded" long ago. PDFs are only checked for being non-empty.
+     */
+    private fun isUsableMediaFile(file: File): Boolean {
+        if (!file.exists() || file.length() == 0L) return false
+        if (file.extension.equals("pdf", ignoreCase = true)) return true
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        val ok = opts.outWidth > 0 && opts.outHeight > 0
+        if (!ok) log.w(TAG, "Local media file is not decodable, re-downloading: ${file.name}")
+        return ok
+    }
 
     /** Resolve a stored media URI to a [File], tolerating a `file://` scheme. */
     private fun resolveLocalFile(uri: String): File =

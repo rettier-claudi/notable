@@ -73,9 +73,10 @@ fun loadBackgroundBitmap(filePath: String, pageNumber: Int, scale: Float): Bitma
     log.v("Reloading background, path: $filePath, scale: $scale")
     val file = resolveBackgroundFile(filePath)
     if (!file.exists()) {
-        log.v("getOrLoadBackground: File does not exist at path: $filePath")
+        log.w("loadBackgroundBitmap: file does not exist: $filePath -> ${file.absolutePath}")
         return null
     }
+    log.i("loadBackgroundBitmap: $filePath -> ${file.absolutePath} (${file.length()} bytes)")
     val timer = Timing("loadBackgroundBitmap")
     if (!filePath.endsWith(".pdf", ignoreCase = true)) {
         try {
