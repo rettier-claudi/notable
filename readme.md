@@ -84,6 +84,14 @@ the `upstream` remote and merged in as it moves.
   quick-page round makes no request at all when there is nothing to upload and nothing was ever
   uploaded. What remains is the root probe, two listings, the tombstone listing and one conditional
   manifest GET per notebook.
+- **Deliberately not done: skipping the per-notebook manifest GET via the directory's
+  `getlastmodified`.** On a server without ETag propagation (nginx) the notebook directory's mtime
+  does move when the manifest is published through tmp-PUT + `MOVE`, which would save one
+  conditional GET per notebook per idle round. It is not worth it: the mtime does *not* move when
+  a manifest is overwritten in place, so any writer that does so — an SSH one-liner, an rsync, a
+  future tool — would become invisible to the device, silently and with no error anywhere. Four
+  304 responses are the wrong thing to trade a silent failure mode for. Decided 2026-09-11 with
+  the bridge side, which uses tmp+MOVE anyway but must not be something the device depends on.
 - **No snack for a sync that simply worked.** Success, "skipped", "already running" and
   cancellation are silent — each snack is an e-ink repaint that leaves ghosting, and the status is
   already on the library chip and the toolbar button. Failures still interrupt.
