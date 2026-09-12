@@ -577,7 +577,11 @@ class WebDAVClient(
      * own timestamp for conflict resolution.
      * @return List of RemoteEntry objects; empty if collection doesn't exist
      */
-    fun listCollectionWithMetadata(path: String): AppResult<List<RemoteEntry>, DomainError> =
+    fun listCollectionWithMetadata(
+        path: String,
+        /** Which child names to keep; the default is bare notebook UUIDs. */
+        keep: (String) -> Boolean = WebDavXml::isValidUuid,
+    ): AppResult<List<RemoteEntry>, DomainError> =
         execute("PROPFIND", { propfindRequest(path, PROPFIND_PROPS) }) { response ->
             when {
                 response.code == HttpURLConnection.HTTP_NOT_FOUND -> AppResult.Success(emptyList())
@@ -586,7 +590,7 @@ class WebDAVClient(
                     val kept = entries.filter { it.href != path && !it.href.endsWith("/$path") }
                         .mapNotNull { entry ->
                             val name = Uri.decode(entry.href.trimEnd('/').substringAfterLast('/'))
-                            if (WebDavXml.isValidUuid(name))
+                            if (keep(name))
                                 RemoteEntry(name, entry.lastModified, ETag.parse(entry.etag))
                             else null
                         }

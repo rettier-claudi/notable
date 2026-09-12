@@ -59,7 +59,11 @@ class SyncWorker(
         // 3. Execute Sync
         return try {
             val result = when (syncRequest) {
-                SyncRequest.SyncAll -> entryPoint.syncOrchestrator().syncAllNotebooks()
+                is SyncRequest.SyncAll -> entryPoint.syncOrchestrator().syncAllNotebooks(
+                    SyncScope(folderId = syncRequest.folderId, extraNotebookId = syncRequest.notebookId)
+                )
+                is SyncRequest.UploadFolderDeletion ->
+                    entryPoint.syncOrchestrator().uploadFolderDeletion(syncRequest.folderId)
                 SyncRequest.ForceUpload -> entryPoint.syncOrchestrator().forceUploadAll()
                 SyncRequest.ForceDownload -> entryPoint.syncOrchestrator().forceDownloadAll()
                 is SyncRequest.UploadDeletion -> entryPoint.syncOrchestrator().uploadDeletion(syncRequest.notebookId)

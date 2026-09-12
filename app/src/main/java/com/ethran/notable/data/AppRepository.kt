@@ -69,6 +69,21 @@ class AppRepository @Inject constructor(
         }
     }
     /**
+     * Delete a folder the *server* removed (folder tombstone): what is still inside — notebooks,
+     * quick pages, subfolders — moves to the root first, in one transaction. The plain
+     * `folderRepository.delete` cascades through Room's foreign keys and would delete every
+     * notebook in it, which the next sync would then tombstone on the server for all devices.
+     */
+    suspend fun deleteFolderKeepingContents(folderId: String) {
+        db.withTransaction {
+            db.notebookDao().moveAllToRoot(folderId, Date())
+            db.pageDao().moveAllToRoot(folderId)
+            db.folderDao().moveChildrenToRoot(folderId)
+            db.folderDao().delete(folderId)
+        }
+    }
+
+    /**
      * Replace a downloaded page's content in a single transaction: an interrupted download can no
      * longer leave a page with its old strokes deleted but new ones not yet inserted (sync P5).
      * A null [pageRepository.getWithDataById] result means the page row is absent -> create it.

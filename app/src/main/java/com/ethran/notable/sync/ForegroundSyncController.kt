@@ -64,7 +64,7 @@ class ForegroundSyncController @Inject constructor(
         }
         lastRequestAt = now
         Log.i(TAG, "Triggering sync ($reason)")
-        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll)
+        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll())
         return true
     }
 

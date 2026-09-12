@@ -63,7 +63,7 @@ class SyncScheduler @Inject constructor(
             repeatIntervalTimeUnit = TimeUnit.MINUTES
         )
             .setInputData(
-                SyncRequest.SyncAll.toDataBuilder()
+                SyncRequest.SyncAll().toDataBuilder()
                     .putString(SyncWorker.KEY_SYNC_TRIGGER, SyncWorker.SYNC_TRIGGER_PERIODIC)
                     .build()
             )
@@ -96,7 +96,7 @@ class SyncScheduler @Inject constructor(
      * Deliberately not tag-based: periodic work sits in ENQUEUED between runs and would always
      * report active.
      */
-    fun immediateSyncActive(request: SyncRequest = SyncRequest.SyncAll): Flow<Boolean> =
+    fun immediateSyncActive(request: SyncRequest = SyncRequest.SyncAll()): Flow<Boolean> =
         workManager.getWorkInfosForUniqueWorkFlow(uniqueNameFor(request))
             .map { infos -> infos.any { !it.state.isFinished } }
 
@@ -109,12 +109,12 @@ class SyncScheduler @Inject constructor(
      * the unique work name afterwards then sees either this request or the run it was folded into
      * (KEEP) -- never the previous, already finished run, which would read as "done" at once.
      */
-    suspend fun triggerImmediateSyncAndAwait(request: SyncRequest = SyncRequest.SyncAll) {
+    suspend fun triggerImmediateSyncAndAwait(request: SyncRequest = SyncRequest.SyncAll()) {
         enqueueImmediate(request).second.await()
     }
 
     fun triggerImmediateSync(
-        request: SyncRequest = SyncRequest.SyncAll
+        request: SyncRequest = SyncRequest.SyncAll()
     ): UUID = enqueueImmediate(request).first
 
     private fun enqueueImmediate(request: SyncRequest): Pair<UUID, Operation> {

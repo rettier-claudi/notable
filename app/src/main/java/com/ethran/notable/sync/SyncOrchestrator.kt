@@ -42,9 +42,11 @@ class SyncOrchestrator @Inject constructor(
     private val log = SyncLogger
 
     /**
-     * Performs a full synchronization of all folders and notebooks.
+     * Performs a full synchronization round. [scope] says which local notebooks get their manifest
+     * checked (see [SyncScope]); folders, tombstones, new remote notebooks, local deletions and
+     * quick pages are handled in every round.
      */
-    suspend fun syncAllNotebooks(): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
+    suspend fun syncAllNotebooks(scope: SyncScope = SyncScope()): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
         if (!syncMutex.tryLock()) {
             log.w(TAG, "Sync already in progress, skipping")
             return@withContext AppResult.Error(DomainError.SyncInProgress)
@@ -132,6 +134,22 @@ class SyncOrchestrator @Inject constructor(
                 }
             )
 
+            // Tombstones before folders: the folder merge is a union, so a folder the server
+            // deleted would otherwise be re-uploaded from the local copy in this very round and
+            // only then deleted locally -- and come back from the server in the next.
+            reporter.beginStep(
+                SyncStep.APPLYING_DELETIONS,
+                PROGRESS_APPLYING_DELETIONS,
+                "Applying remote deletions..."
+            )
+            val tombstones = if (uploadOnly) {
+                RemoteTombstones(emptySet(), emptyMap())
+            } else {
+                notebookSyncService.applyRemoteDeletions(client, TOMBSTONE_MAX_AGE_DAYS)
+                    .onFailure { return@withContext failStep(it) }
+            }
+            val tombstonedIds = tombstones.notebookIds
+
             reporter.beginStep(
                 SyncStep.SYNCING_FOLDERS,
                 PROGRESS_SYNCING_FOLDERS,
@@ -140,20 +158,9 @@ class SyncOrchestrator @Inject constructor(
             folderSyncService.syncFolders(
                 client, uploadOnly, downloadOnly,
                 remoteFileExists = SyncPaths.foldersFile().substringAfterLast('/') in rootChildren,
+                folderTombstones = tombstones.folders,
             ).onFailure {
                 return@withContext failStep(it)
-            }
-
-            reporter.beginStep(
-                SyncStep.APPLYING_DELETIONS,
-                PROGRESS_APPLYING_DELETIONS,
-                "Applying remote deletions..."
-            )
-            val tombstonedIds = if (uploadOnly) {
-                emptySet()
-            } else {
-                notebookSyncService.applyRemoteDeletions(client, TOMBSTONE_MAX_AGE_DAYS)
-                    .onFailure { return@withContext failStep(it) }
             }
 
             reporter.beginStep(
@@ -165,7 +172,7 @@ class SyncOrchestrator @Inject constructor(
             val preDownloadIds = when (
                 val syncResult = notebookReconciliationService.syncExistingNotebooks(
                     client, remoteNotebookIds, uploadOnly, downloadOnly,
-                    bulkEnabled, currentServerKey, dirEtags
+                    bulkEnabled, currentServerKey, dirEtags, scope
                 )
             ) {
                 is AppResult.Success -> syncResult.data
@@ -436,6 +443,28 @@ class SyncOrchestrator @Inject constructor(
             }
         }
 
+    /**
+     * A folder deleted on this device: write `deletions/folder-<id>` so the other side drops it
+     * instead of restoring it from folders.json (the merge there is a union). The folder itself is
+     * already gone locally; the next round's merge leaves it out of folders.json because the
+     * tombstone is now listed.
+     */
+    suspend fun uploadFolderDeletion(folderId: String): AppResult<Unit, DomainError> =
+        withContext(ioDispatcher) {
+            val settings = kvProxy.getSyncSettings()
+            if (!settings.syncEnabled || settings.downloadOnly) return@withContext AppResult.Success(Unit)
+            syncPreflightService.checkWifiConstraint().flatMap {
+                if (settings.username.isBlank() || settings.password.isBlank()) {
+                    return@flatMap AppResult.Error(DomainError.SyncAuthError)
+                }
+                val client =
+                    webDavClientFactory.create(settings.serverUrl, settings.username, settings.password)
+                client.putFile(SyncPaths.folderTombstone(folderId), ByteArray(0)).map {
+                    log.i(TAG, "Folder tombstone uploaded for: $folderId")
+                }
+            }
+        }
+
     suspend fun forceUploadAll(): AppResult<Unit, DomainError> =
         runForce("Uploading all notebooks...") { syncForceService.forceUploadAll() }
 
@@ -602,8 +631,8 @@ class SyncOrchestrator @Inject constructor(
     companion object {
         private const val TAG = "SyncOrchestrator"
         private const val PROGRESS_INITIALIZING = 0.0f
-        private const val PROGRESS_SYNCING_FOLDERS = 0.1f
-        private const val PROGRESS_APPLYING_DELETIONS = 0.2f
+        private const val PROGRESS_APPLYING_DELETIONS = 0.1f
+        private const val PROGRESS_SYNCING_FOLDERS = 0.2f
         private const val PROGRESS_SYNCING_NOTEBOOKS = 0.3f
         private const val PROGRESS_DOWNLOADING_NEW = 0.6f
         private const val PROGRESS_UPLOADING_DELETIONS = 0.8f

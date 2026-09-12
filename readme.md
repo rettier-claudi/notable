@@ -60,6 +60,66 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Sync scope: the root and "Heute", not every notebook** (v0.2.6-claudi.7). A full round —
+  wake-up, activity, leaving the app, the periodic job, the home screen's sync button in the
+  root — checks the manifests of the notebooks in the root ("Ablage") and in the folder titled
+  `Heute` only, plus any notebook with local changes not yet on the server (never synced, edited
+  since, last sync in error) — pushing costs requests only when there is something to push, so a
+  book moved out of `Heute` still gets its move up. The folder is matched by **title**, not id,
+  because the server renames its day folders every night (`Heute` → `Gestern` → `dd.mm.yyyy`).
+  Inside another folder the home screen's sync button syncs exactly that folder (`SyncAll(folderId)`);
+  the editor's sync button and *Send* always include the open notebook (`SyncAll(notebookId)`),
+  whatever folder it is in. Everything else in a round is scope-independent and fixed-cost:
+  folders.json, tombstones, *new* remote notebooks (downloaded whatever their folder — a notebook
+  is new only once), local deletions, quick pages. Idle round with 6 notebooks before: 12
+  requests (root PROPFIND, notebooks PROPFIND, folders.json GET + PUT, deletions PROPFIND,
+  quickpages PROPFIND, 6 × conditional manifest GET); after: 6 + one GET per notebook in scope.
+  A server-side change to a notebook outside the scope arrives when its folder is synced, or —
+  for a move into the root or `Heute` — the moment its folder becomes `Heute`. `folders.json` is
+  still written back every round: the server side reads its `serverTimestamp` as this device's
+  heartbeat; drop that PUT only together with that.
+- **Folder tombstones** (v0.2.6-claudi.7): `deletions/folder-<folderId>`, zero bytes, in the same
+  directory as notebook tombstones (same listing — no extra request — same 90-day prune, same
+  resurrection rule). A folder with a tombstone is dropped from the folders.json merge on both
+  sides and deleted locally, *unless* the local copy's `updatedAt` is after the tombstone's
+  `Last-Modified` — then it is kept, re-uploaded, and the tombstone removed. Contents still in a
+  server-deleted folder move to the root (notebooks with a fresh `updatedAt`, so the move
+  reaches the server; quick pages untouched); nothing is deleted with the folder. Tombstones are
+  listed *before* the folder merge, otherwise the union merge would re-upload the folder in the
+  same round. Deleting a folder in the app writes the tombstone (`UploadFolderDeletion`) and,
+  as upstream, cascades to its notebooks (which are then tombstoned by the next round). What the
+  server side has to do: put the tombstone first, then rewrite folders.json without the folder;
+  before "restoring" a folder missing from folders.json, check for its tombstone.
+- **Folder rename stamps `updatedAt`** (v0.2.6-claudi.7): the merge is last-writer-wins per
+  folder, and upstream's rename kept the old timestamp, so the server's copy of the title won
+  the next round and the rename silently reverted. A rename — here or on the server — is a
+  newer `updatedAt` with a new title on the same id; no notebook is involved, so nothing is
+  re-transferred and nothing conflicts. A renamed folder never comes back under its old name:
+  the older timestamp loses. Whoever wants to rename it back has to write a newer `updatedAt`.
+- **Moves.** A notebook moved to another folder here gets `updatedAt = now` and uploads its
+  manifest (plus one `PROPFIND` of `pages/`; no page is re-uploaded). A notebook moved on the
+  server (new `parentFolderId`, `updatedAt` more than 1 s newer, manifest published by tmp +
+  `MOVE` so page ETags stay put) is downloaded as a manifest plus one `pages/` listing; no page is
+  fetched. A tied `updatedAt` with a different `parentFolderId` is a structural conflict
+  (dialog) — the server must make its `updatedAt` clearly newer. A manifest pointing at a folder
+  this device does not have is placed in the root with a log line instead of failing the download.
+- **Sent quick pages are exempt from the wipe guard** (v0.2.6-claudi.7): a locked (sent) quick
+  page whose server file vanished is the consumer's expected "ingested, done", never evidence of
+  a misread listing, and is deleted locally whatever the count. `looksLikeQuickPageWipe`
+  (≥ 3 and more than half) now counts only never-sent pages against never-sent rows. The server
+  side may remove any number of *sent* pages at once (those it received a `sync-and-notify`
+  webhook for, `notebookId: null`, `syncSucceeded: true`); for pages it ingested without a send
+  the old limit of two per device round still applies.
+- **Folder bar instead of breadcrumb + folder list** (v0.2.6-claudi.7): the home screen and every
+  folder show the same bar at the top — *Ablage* (the root) and every root folder, the open one
+  filled black; tap to switch, long-press a folder for rename/delete. Order: `Heute`, `Gestern`,
+  day folders `dd.mm.yyyy` newest first, then the rest alphabetically (Room's insertion order
+  was meaningless once folders get renamed in place). No nesting is offered: *New folder* always
+  creates a root folder; a nested folder from before is still reachable (its path and children are
+  appended to the bar while it is open). *New folder* and *Open file* (PDF/xopp import) are
+  icon-only buttons next to the sync chip; the grid tile only creates notebooks now. Both top
+  rows have fixed heights: the old breadcrumb put a 24 dp chevron next to 20 sp text inside a
+  folder only, which made the bar a pixel or two taller there than on the home screen.
 - **Fixed pages** — *Settings → General → "Fixed pages — disable scrolling"*: the canvas never
   moves at 100 % zoom (no drag scroll, no flick, no scroll indicators). Panning stays possible
   while zoomed so a zoomed page remains reachable.

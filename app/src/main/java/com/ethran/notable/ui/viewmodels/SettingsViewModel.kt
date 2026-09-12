@@ -275,7 +275,7 @@ class SettingsViewModel @Inject constructor(
      * persisted by the orchestrator on success (no longer written here — P27).
      */
     fun onManualSync() {
-        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll)
+        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll())
     }
 
     // ----------------- //

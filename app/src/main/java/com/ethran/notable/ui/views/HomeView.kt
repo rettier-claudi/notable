@@ -62,7 +62,6 @@ import com.ethran.notable.sync.SyncBadge
 import com.ethran.notable.sync.SyncScheduler
 import com.ethran.notable.ui.LocalSnackContext
 import com.ethran.notable.ui.SnackConf
-import com.ethran.notable.ui.components.BreadCrumb
 import com.ethran.notable.ui.components.NotebookCard
 import com.ethran.notable.ui.components.ShowPagesRow
 import com.ethran.notable.ui.dialogs.ConflictResolutionDialog
@@ -79,6 +78,7 @@ import compose.icons.feathericons.Check
 import compose.icons.feathericons.FilePlus
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.FolderPlus
+import compose.icons.feathericons.Home
 import compose.icons.feathericons.RefreshCw
 import compose.icons.feathericons.Settings
 import compose.icons.feathericons.Upload
@@ -147,6 +147,7 @@ fun Library(
         goToPage = goToPage,
         onCreateNewQuickPage = { onCreateNewQuickPage(uiState.folderId) },
         onCreateNewFolder = viewModel::createNewFolder,
+        onDeleteFolder = viewModel::deleteFolder,
         onDeleteEmptyBook = viewModel::deleteEmptyBook,
         onCreateNewNotebook = viewModel::onCreateNewNotebook,
         onImportPdf = viewModel::onPdfFile,
@@ -172,6 +173,7 @@ fun LibraryContent(
     goToPage: (String) -> Unit,
     onCreateNewQuickPage: () -> Unit,
     onCreateNewFolder: () -> Unit,
+    onDeleteFolder: (String) -> Unit = {},
     onDeleteEmptyBook: (String) -> Unit,
     onCreateNewNotebook: () -> Unit,
     onImportPdf: (Uri, Boolean) -> Unit,
@@ -180,8 +182,24 @@ fun LibraryContent(
 ) {
     Column(Modifier.fillMaxSize()) {
         Topbar {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Topbar stacks its content in a Box, so the two rows go in a Column. Same two rows
+            // in the root and in every folder, with fixed heights: the old breadcrumb put a 24 dp
+            // chevron next to 20 sp text inside a folder only (both in one Box with the chip
+            // row), which made the bar a pixel or two taller there than on the home screen.
+            Column(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(TOP_ROW_HEIGHT),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Spacer(modifier = Modifier.weight(1f))
+                TopIconButton(
+                    icon = FeatherIcons.FolderPlus,
+                    contentDescription = stringResource(R.string.home_new_folder_button),
+                    onClick = onCreateNewFolder,
+                )
+                ImportFileButton(onImportPdf = onImportPdf, onImportXopp = onImportXopp)
                 SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow)
                 BadgedBox(
                     badge = {
@@ -198,24 +216,17 @@ fun LibraryContent(
                     )
                 }
             }
-            Row(Modifier.padding(10.dp)) {
-                BreadCrumb(
-                    folders = uiState.breadcrumbFolders, onSelectFolderId = onNavigateToFolder
-                )
+            FolderBar(
+                folderRepository = appRepository.folderRepository,
+                folders = uiState.folders,
+                currentFolderId = uiState.folderId,
+                onNavigateToFolder = onNavigateToFolder,
+                onDeleteFolder = onDeleteFolder,
+            )
             }
-
         }
 
         Column(Modifier.padding(10.dp)) {
-            Spacer(Modifier.height(10.dp))
-
-            FolderList(
-                appRepository = appRepository,
-                folders = uiState.folders,
-                onNavigateToFolder = onNavigateToFolder,
-                onCreateNewFolder = onCreateNewFolder
-            )
-
             Spacer(Modifier.height(10.dp))
             ShowPagesRow(
                 appRepository = appRepository,
@@ -242,14 +253,169 @@ fun LibraryContent(
                 onNavigateToEditor = onNavigateToEditor,
                 onDeleteEmptyBook = onDeleteEmptyBook,
                 onCreateNewNotebook = onCreateNewNotebook,
-                onImportPdf = onImportPdf,
-                onImportXopp = onImportXopp,
                 onPreviewMissing = onPreviewMissing
             )
         }
     }
+}
 
+private val TOP_ROW_HEIGHT = 44.dp
+private val FOLDER_BAR_HEIGHT = 44.dp
 
+/** An icon-only button in the top row, sized like the settings icon. */
+@Composable
+private fun TopIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Icon(
+        imageVector = icon,
+        contentDescription = contentDescription,
+        tint = Color.Black,
+        modifier = Modifier
+            .padding(8.dp)
+            .size(24.dp)
+            .noRippleClickable(onClick = onClick)
+    )
+}
+
+/**
+ * "Open file" as an icon in the top row: the same PDF/xopp import that used to be the lower half
+ * of the import tile in the notebook grid.
+ */
+@Composable
+fun ImportFileButton(onImportPdf: (Uri, Boolean) -> Unit, onImportXopp: (Uri) -> Unit) {
+    val context = LocalContext.current
+    val snackState = LocalSnackContext.current
+    var showPdfImportChoiceDialog by remember { mutableStateOf<Uri?>(null) }
+
+    showPdfImportChoiceDialog?.let { uri ->
+        PdfImportChoiceDialog(uri = uri, onCopy = { picked ->
+            showPdfImportChoiceDialog = null
+            onImportPdf(picked, /* copy= */ true)
+        }, onObserve = {
+            showPdfImportChoiceDialog = null
+            onImportPdf(it, /* copy= */ false)
+        }, onDismiss = { showPdfImportChoiceDialog = null })
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) {
+            log.w("OpenDocument: uri is null (user cancelled or provider returned null)")
+            return@rememberLauncherForActivityResult
+        }
+        try {
+            val mimeType = context.contentResolver.getType(uri)
+            log.d("Selected file mimeType: $mimeType, uri: $uri")
+            if (mimeType == "application/pdf" || uri.toString().endsWith(".pdf", ignoreCase = true)) {
+                showPdfImportChoiceDialog = uri
+            } else {
+                onImportXopp(uri)
+            }
+        } catch (e: Exception) {
+            log.e("contentPicker failed: ${e.message}", e)
+            snackState.showOrUpdateSnack(SnackConf(text = "Importing failed: ${e.message}"))
+        }
+    }
+    TopIconButton(
+        icon = FeatherIcons.Upload,
+        contentDescription = stringResource(R.string.home_import_file),
+        onClick = {
+            launcher.launch(
+                arrayOf(
+                    "application/x-xopp",
+                    "application/gzip",
+                    "application/octet-stream",
+                    "application/pdf"
+                )
+            )
+        },
+    )
+}
+
+/**
+ * The folder bar: "Ablage" (the root) and the root folders, in [sortFoldersForBar] order, the
+ * open one filled black. Tapping switches; long-pressing a folder opens its settings (rename,
+ * delete). Fixed height on purpose (see [LibraryContent]). No nesting is offered here.
+ */
+@Composable
+fun FolderBar(
+    folderRepository: com.ethran.notable.data.db.FolderRepository,
+    folders: List<Folder>,
+    currentFolderId: String?,
+    onNavigateToFolder: (String?) -> Unit,
+    onDeleteFolder: (String) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(FOLDER_BAR_HEIGHT)
+            .autoEInkAnimationOnScroll()
+    ) {
+        item(key = "root") {
+            FolderChip(
+                title = stringResource(R.string.home_root_folder),
+                icon = FeatherIcons.Home,
+                selected = currentFolderId == null,
+                onClick = { onNavigateToFolder(null) },
+                onLongClick = null,
+            )
+        }
+        items(folders, key = { it.id }) { folder ->
+            var isFolderSettingsOpen by remember { mutableStateOf(false) }
+            if (isFolderSettingsOpen) FolderConfigDialog(
+                folderRepository,
+                folderId = folder.id,
+                onClose = {
+                    log.i("Closing Directory Dialog")
+                    isFolderSettingsOpen = false
+                },
+                onDelete = {
+                    isFolderSettingsOpen = false
+                    onDeleteFolder(folder.id)
+                    if (folder.id == currentFolderId) onNavigateToFolder(null)
+                },
+            )
+            FolderChip(
+                title = folder.title,
+                icon = FeatherIcons.Folder,
+                selected = folder.id == currentFolderId,
+                onClick = { onNavigateToFolder(folder.id) },
+                onLongClick = { isFolderSettingsOpen = true },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderChip(
+    title: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+) {
+    val fg = if (selected) Color.White else Color.Black
+    val bg = if (selected) Color.Black else Color.Transparent
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(32.dp)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .border(0.5.dp, Color.Black)
+            .background(bg)
+            .padding(horizontal = 10.dp)
+    ) {
+        Icon(
+            imageVector = icon, contentDescription = null, tint = fg,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text = title, color = fg, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /**
@@ -307,65 +473,6 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
 }
 
 @Composable
-fun FolderList(
-    appRepository: AppRepository,
-    folders: List<Folder>,
-    onNavigateToFolder: (String) -> Unit, onCreateNewFolder: () -> Unit
-) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .autoEInkAnimationOnScroll()
-    ) {
-        item {
-            // Add new folder row
-            Row(
-                Modifier
-                    .border(0.5.dp, Color.Black)
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                    .noRippleClickable(onClick = onCreateNewFolder)
-            ) {
-                Icon(
-                    imageVector = FeatherIcons.FolderPlus, contentDescription = "Add Folder",
-                    Modifier.height(20.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(text = stringResource(R.string.home_add_new_folder))
-            }
-        }
-
-        if (folders.isNotEmpty()) {
-            items(folders) { folder ->
-                var isFolderSettingsOpen by remember { mutableStateOf(false) }
-                if (isFolderSettingsOpen) FolderConfigDialog(
-                    appRepository.folderRepository,
-                    folderId = folder.id,
-                    onClose = {
-                        log.i("Closing Directory Dialog")
-                        isFolderSettingsOpen = false
-                    })
-                Row(
-                    Modifier
-                        .combinedClickable(
-                            onClick = { onNavigateToFolder(folder.id) },
-                            onLongClick = { isFolderSettingsOpen = true })
-                        .border(0.5.dp, Color.Black)
-                        .padding(10.dp, 5.dp)
-                ) {
-                    Icon(
-                        imageVector = FeatherIcons.Folder, contentDescription = "Folder",
-                        Modifier.height(20.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(text = folder.title)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun NotebookGrid(
     appRepository: AppRepository,
     exportEngine: ExportEngine,
@@ -377,8 +484,6 @@ fun NotebookGrid(
     onNavigateToEditor: (String, String) -> Unit,
     onDeleteEmptyBook: (String) -> Unit,
     onCreateNewNotebook: () -> Unit,
-    onImportPdf: (Uri, Boolean) -> Unit,
-    onImportXopp: (Uri) -> Unit,
     onPreviewMissing: (String) -> Unit
 ) {
     Text(text = stringResource(R.string.home_notebooks))
@@ -390,11 +495,7 @@ fun NotebookGrid(
         modifier = Modifier.autoEInkAnimationOnScroll()
     ) {
         item {
-            NotebookImportPanel(
-                onCreateNewNotebook = onCreateNewNotebook,
-                onImportPdf = onImportPdf,
-                onImportXopp = onImportXopp
-            )
+            NewNotebookTile(onCreateNewNotebook = onCreateNewNotebook)
         }
 
         if (books.isNotEmpty()) {
@@ -446,104 +547,22 @@ fun NotebookGrid(
     }
 }
 
+/** The "new notebook" tile in the grid. File import moved to the top row ([ImportFileButton]). */
 @Composable
-fun NotebookImportPanel(
-    onCreateNewNotebook: () -> Unit,
-    onImportPdf: (Uri, Boolean) -> Unit,
-    onImportXopp: (Uri) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val snackState = LocalSnackContext.current
-    var showPdfImportChoiceDialog by remember { mutableStateOf<Uri?>(null) }
-
-    showPdfImportChoiceDialog?.let { uri ->
-        PdfImportChoiceDialog(uri = uri, onCopy = { uri ->
-            showPdfImportChoiceDialog = null
-            onImportPdf(uri, /* copy= */ true)
-        }, onObserve = {
-            showPdfImportChoiceDialog = null
-            onImportPdf(it, /* copy= */ false)
-        }, onDismiss = { showPdfImportChoiceDialog = null })
-    }
-
-
+fun NewNotebookTile(onCreateNewNotebook: () -> Unit, modifier: Modifier = Modifier) {
     Box(
+        contentAlignment = Alignment.Center,
         modifier = modifier
             .width(100.dp)
             .aspectRatio(3f / 4f)
-            .border(1.dp, Color.Gray, RectangleShape),
+            .background(Color.LightGray.copy(alpha = 0.3f))
+            .border(2.dp, Color.Black, RectangleShape)
+            .noRippleClickable(onClick = onCreateNewNotebook)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Create New Notebook Button (Top Half)
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f) // Takes half the height
-                    .fillMaxWidth()
-                    .background(Color.LightGray.copy(alpha = 0.3f))
-                    .border(2.dp, Color.Black, RectangleShape)
-                    .noRippleClickable(onClick = onCreateNewNotebook)
-            ) {
-                Icon(
-                    imageVector = FeatherIcons.FilePlus, contentDescription = "Create Notebook",
-                    tint = Color.Gray, modifier = Modifier.size(40.dp)
-                )
-            }
-
-            val launcher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.OpenDocument()
-            ) { uri: Uri? ->
-                if (uri == null) {
-                    log.w("PickVisualMedia: uri is null (user cancelled or provider returned null)")
-                    return@rememberLauncherForActivityResult
-                }
-                try {
-
-                    val mimeType = context.contentResolver.getType(uri)
-                    log.d("Selected file mimeType: $mimeType, uri: $uri")
-                    if (mimeType == "application/pdf" || uri.toString()
-                            .endsWith(".pdf", ignoreCase = true)
-                    ) {
-                        showPdfImportChoiceDialog = uri
-                    } else {
-                        onImportXopp(uri)
-                    }
-                } catch (e: Exception) {
-                    log.e("contentPicker failed: ${e.message}", e)
-                    snackState.showOrUpdateSnack(SnackConf(text = "Importing failed: ${e.message}"))
-                }
-            }
-            // Import Notebook (Bottom Half)
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color.LightGray.copy(alpha = 0.3f))
-                    .border(2.dp, Color.Black, RectangleShape)
-                    .noRippleClickable {
-                        launcher.launch(
-                            arrayOf(
-                                "application/x-xopp",
-                                "application/gzip",
-                                "application/octet-stream",
-                                "application/pdf"
-                            )
-                        )
-                    }
-
-            ) {
-                Icon(
-                    imageVector = FeatherIcons.Upload,
-                    contentDescription = "Import Notebook",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(40.dp),
-                )
-            }
-        }
+        Icon(
+            imageVector = FeatherIcons.FilePlus, contentDescription = "Create Notebook",
+            tint = Color.Gray, modifier = Modifier.size(40.dp)
+        )
     }
 }
 
@@ -561,10 +580,6 @@ fun LibraryContentPreview() {
         folderId = null,
         isLatestVersion = true,
         isImporting = false,
-        breadcrumbFolders = listOf(
-            // Optional: Add mock breadcrumbs if you want to preview nested folder state
-             Folder(id = "root", title = "Home", parentFolderId = null)
-        ),
         folders = listOf(
             // Adjust constructor arguments based on your exact entity definition
             Folder(id = "folder_1", title = "Work Notes", parentFolderId = null),
@@ -602,7 +617,6 @@ fun LibraryContentUpdatePreview() {
         folderId = "folder_1",
         isLatestVersion = false, // Will show the red badge on the settings icon
         isImporting = true,      // Will hide the delete warning for empty books
-        breadcrumbFolders = emptyList(),
         folders = emptyList(),
         books = emptyList(),
         singlePages = emptyList()

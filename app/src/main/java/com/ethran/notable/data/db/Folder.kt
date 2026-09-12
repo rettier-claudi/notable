@@ -52,6 +52,12 @@ interface FolderDao {
     @Query("SELECT * FROM folder")
     fun getAll(): List<Folder>
 
+    @Query("SELECT * FROM folder")
+    fun getAllLive(): LiveData<List<Folder>>
+
+    @Query("UPDATE folder SET parentFolderId = NULL WHERE parentFolderId = :folderId")
+    suspend fun moveChildrenToRoot(folderId: String)
+
     @Insert
     suspend fun create(folder: Folder): Long
 
@@ -72,13 +78,25 @@ class FolderRepository @Inject constructor(
         db.create(folder)
     }
 
+    /** Write the folder as given (sync applies server state verbatim, timestamp included). */
     suspend fun update(folder: Folder) {
         db.update(folder)
+    }
+
+    /**
+     * A rename made *here* stamps `updatedAt`, because the folders.json merge is last-writer-wins
+     * per folder: without a newer timestamp the server's copy would simply overwrite the new title
+     * on the next round.
+     */
+    suspend fun rename(folder: Folder, title: String) {
+        db.update(folder.copy(title = title, updatedAt = Date()))
     }
 
     fun getAll(): List<Folder> {
         return db.getAll()
     }
+
+    fun getAllLive(): LiveData<List<Folder>> = db.getAllLive()
 
     fun getAllInFolder(folderId: String? = null): LiveData<List<Folder>> {
         return db.getChildrenFolders(folderId)

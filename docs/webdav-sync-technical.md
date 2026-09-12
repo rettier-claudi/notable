@@ -109,26 +109,32 @@ acquire the lock, it returns `SyncInProgress` rather than queueing behind the ru
    ├── Ensure /notable, /notable/notebooks, and /notable/deletions exist (MKCOL)
    └── One depth-1 PROPFIND of /notable/notebooks; the id set is shared by steps 4 and 5
 
-2. SYNC FOLDERS
-   ├── If folders.json exists, fetch it with its ETag
-   ├── Merge: a local folder replaces its remote counterpart only when its updatedAt is later
-   ├── Apply the merged set locally, unless upload-only is enabled
-   └── Write it back with If-Match, unless download-only is enabled
-       (a weak or absent server ETag drops the precondition rather than failing; the merge is a
-        union, so an unguarded write cannot drop a remote folder)
-       (if the file is absent, non-empty local folders are uploaded unless download-only)
-
-3. APPLY REMOTE NOTEBOOK TOMBSTONES  (skipped in upload-only mode)
-   ├── List /notable/deletions with getlastmodified
-   ├── For each UUID tombstone: delete the local notebook, UNLESS its updatedAt is after the
+2. APPLY REMOTE TOMBSTONES  (skipped in upload-only mode; before the folder merge on purpose)
+   ├── List /notable/deletions with getlastmodified: `<uuid>` = notebook, `folder-<uuid>` = folder
+   ├── For each notebook tombstone: delete the local notebook, UNLESS its updatedAt is after the
    │   tombstone time (resurrection — see section 5.7)
    ├── Remove the notebook's notebook_sync_state row after local deletion
    ├── Best-effort delete tombstones older than 90 days — this still runs in download-only mode,
    │   so that mode is not strictly read-only on the server
-   └── Return the tombstoned-id set, used to suppress re-downloading those ids in step 5
+   └── Return the notebook tombstone ids (suppress re-download in step 5) and the folder
+       tombstones with their times (step 3)
 
-4. SYNC EXISTING LOCAL NOTEBOOKS
-   └── For each local notebook (per-item progress carries the notebook id):
+3. SYNC FOLDERS
+   ├── If folders.json exists, fetch it with its ETag
+   ├── Merge: a local folder replaces its remote counterpart only when its updatedAt is later;
+   │   a folder with a tombstone is dropped from both sides unless the local copy's updatedAt is
+   │   after the tombstone (then it is kept and the tombstone deleted) — see 5.8
+   ├── Apply the merged set locally, unless upload-only is enabled: tombstoned folders are
+   │   deleted with their contents moved to the root first (Room would cascade otherwise)
+   └── Write it back with If-Match, unless download-only is enabled — every round, changed or
+       not (the server side reads serverTimestamp as this device's heartbeat)
+       (a weak or absent server ETag drops the precondition rather than failing; the merge is a
+        union, so an unguarded write cannot drop a remote folder)
+       (if the file is absent, non-empty local folders are uploaded unless download-only)
+
+4. SYNC LOCAL NOTEBOOKS IN SCOPE  (`SyncScope`: root + the folder titled "Heute" by default, or
+   one folder; always plus the named notebook and every locally dirty notebook)
+   └── For each local notebook in scope (per-item progress carries the notebook id):
        ├── Existence = "id in the shared PROPFIND set?" (no per-notebook HEAD)
        ├── If remote absent → upload, unless download-only is enabled
        └── If remote present:
@@ -314,12 +320,16 @@ for the remote image path and rewrites downloaded image records to local absolut
 `parentFolderId` references another folder's `id` for nesting, or `null` for root-level folders. The
 merge does not use `serverTimestamp` — only each folder's own `updatedAt`.
 
-### 4.5 Tombstone files (`deletions/{uuid}`)
+### 4.5 Tombstone files (`deletions/{uuid}`, `deletions/folder-{uuid}`)
 
 Each deleted notebook has a zero-byte file at `/notable/deletions/{notebook-uuid}`. It has no
 content; the server's own `lastModified` timestamp on the file provides the deletion time used for
 conflict resolution (section 5.7). Independent per-notebook tombstone files mean two devices can each
 write a deletion without racing over a shared file the way a single `deletions.json` would.
+
+A deleted folder has a zero-byte file at `/notable/deletions/folder-{folder-uuid}` — same
+directory and listing, same prune, same resurrection rule (5.8). A writer that deletes a folder
+puts the tombstone first and then rewrites `folders.json` without the folder.
 
 ### 4.6 JSON configuration
 
@@ -422,11 +432,16 @@ deletion always sticking.
 
 ### 5.8 Folder merge
 
-Folders use a simpler per-folder last-writer-wins merge: all remote folders load into a map, and a
-local folder replaces its remote counterpart only when its `updatedAt` is later. There is no folder
-tombstone, so an absent folder is indistinguishable from a new remote folder and can reappear after
-being deleted on one device and synced from another — notebooks inside it are not deleted merely
-because the folder reappears.
+Folders use a simpler per-folder last-writer-wins merge (`mergeFolders`, pure and unit-tested): all
+remote folders load into a map, and a local folder replaces its remote counterpart only when its
+`updatedAt` is later. A rename is therefore a newer `updatedAt` with a new title on the same id —
+`FolderRepository.rename` stamps it (a plain `update` keeps the timestamp, and the server's copy of
+the title would win the next round). Folders known to one side only are kept, except when a
+folder tombstone (4.5) names them: then the folder is dropped from both sides and deleted locally
+with its contents moved to the root — unless the local copy's `updatedAt` is after the tombstone's
+`Last-Modified`, in which case the folder is kept, written back, and the tombstone removed. Tombstones
+are applied before the merge (3.1 step 2) so a deleted folder is not re-uploaded from the local
+copy in the same round.
 
 ### 5.9 Reconciliation decision (`NotebookSyncPlanner`)
 
@@ -585,7 +600,8 @@ treated as success — the resource is already gone. Both are therefore safe to 
 
 - Same-page conflicts require choosing one whole page; there is no stroke-level merge.
 - `SERVER_WINS` and `LOCAL_WINS` remain persisted placeholders. The engine always uses `ASK`.
-- Conflict resolution requires two-way sync, and folder deletions do not propagate.
+- Conflict resolution requires two-way sync. Folder deletions propagate through folder tombstones
+  (4.5); a device that misses the 90-day tombstone window resurrects the folder.
 - Weak ETags cannot guard writes. When a server supplies them, `ETag.writeGuard` drops the
   precondition and conflict handling degrades to last-writer-wins.
 - Conflict resolution relies on synchronized device clocks; normal preflight rejects skew over 30

@@ -7,7 +7,7 @@ class SyncRequestTest {
 
     @Test
     fun typeKey_matches_declared_constants_for_every_variant() {
-        assertEquals(SyncRequest.TYPE_SYNC_ALL, SyncRequest.SyncAll.typeKey)
+        assertEquals(SyncRequest.TYPE_SYNC_ALL, SyncRequest.SyncAll().typeKey)
         assertEquals(SyncRequest.TYPE_FORCE_UPLOAD, SyncRequest.ForceUpload.typeKey)
         assertEquals(SyncRequest.TYPE_FORCE_DOWNLOAD, SyncRequest.ForceDownload.typeKey)
         assertEquals(
@@ -33,9 +33,28 @@ class SyncRequestTest {
 
     @Test
     fun identifier_falls_back_to_default_for_parameterless_requests() {
-        assertEquals("default", SyncRequest.SyncAll.identifier)
+        assertEquals("default", SyncRequest.SyncAll().identifier)
+        // Every scope of a full round shares the unique work name: a round already running
+        // satisfies the request (KEEP), whatever it was scoped to.
+        assertEquals("default", SyncRequest.SyncAll(folderId = "f").identifier)
+        assertEquals("default", SyncRequest.SyncAll(notebookId = "n").identifier)
         assertEquals("default", SyncRequest.ForceUpload.identifier)
         assertEquals("default", SyncRequest.ForceDownload.identifier)
+    }
+
+    @Test
+    fun folder_deletion_is_keyed_by_folder() {
+        assertEquals(SyncRequest.TYPE_UPLOAD_FOLDER_DELETION, SyncRequest.UploadFolderDeletion("f-1").typeKey)
+        assertEquals("folderId:f-1", SyncRequest.UploadFolderDeletion("f-1").identifier)
+    }
+
+    @Test
+    fun scoped_full_sync_survives_the_work_data_round_trip() {
+        val scoped = SyncRequest.SyncAll(folderId = "f-1", notebookId = "n-1")
+        assertEquals(scoped, SyncRequest.fromData(scoped.toDataBuilder().build()))
+        assertEquals(SyncRequest.SyncAll(), SyncRequest.fromData(SyncRequest.SyncAll().toDataBuilder().build()))
+        val deletion = SyncRequest.UploadFolderDeletion("f-2")
+        assertEquals(deletion, SyncRequest.fromData(deletion.toDataBuilder().build()))
     }
 
     @Test

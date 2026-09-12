@@ -35,6 +35,15 @@ object SyncPaths {
      */
     fun tombstone(notebookId: String) = "/$ROOT/deletions/$notebookId"
 
+    /**
+     * Zero-byte tombstone for a deleted *folder*: `deletions/folder-<folderId>`. Same directory,
+     * same listing, same 90-day prune and the same resurrection rule as notebook tombstones —
+     * distinguished only by the prefix, so a folder tombstone costs no extra request per round.
+     */
+    fun folderTombstone(folderId: String) = "/$ROOT/deletions/$FOLDER_TOMBSTONE_PREFIX$folderId"
+
+    const val FOLDER_TOMBSTONE_PREFIX = "folder-"
+
     // Quick pages (single pages without a notebook): one flat directory of page files, uploaded
     // one-way; a page file removed on the server removes the page on the device.
     fun quickPagesDir() = "/$ROOT/quickpages"

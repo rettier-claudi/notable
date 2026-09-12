@@ -74,6 +74,11 @@ interface NotebookDao {
     @Query("UPDATE notebook SET pageIds=:pageIds, updatedAt=:updatedAt WHERE id=:id")
     suspend fun setPageIds(id: String, pageIds: List<String>, updatedAt: Date)
 
+    // Stamps updatedAt: a folder that vanished under a notebook is a structural change that has
+    // to reach the server (manifest with parentFolderId = null), like any move.
+    @Query("UPDATE notebook SET parentFolderId = NULL, updatedAt = :updatedAt WHERE parentFolderId = :folderId")
+    suspend fun moveAllToRoot(folderId: String, updatedAt: Date)
+
     @Insert
     suspend fun create(notebook: Notebook): Long
 

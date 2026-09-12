@@ -30,6 +30,7 @@ import com.ethran.notable.io.ExportEngine
 import com.ethran.notable.io.ExportFormat
 import com.ethran.notable.io.ExportTarget
 import com.ethran.notable.sync.SyncOrchestrator
+import com.ethran.notable.sync.SyncRequest
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.ui.SnackConf
 import com.ethran.notable.ui.SnackDispatcher
@@ -455,7 +456,8 @@ class EditorViewModel @Inject constructor(
             ToolbarAction.NavigateToPages -> handleNavigateToPages()
             ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
             ToolbarAction.SyncNow -> {
-                syncScheduler.triggerImmediateSync()
+                // Named so the round covers this notebook whatever folder it is in (SyncScope).
+                syncScheduler.triggerImmediateSync(SyncRequest.SyncAll(notebookId = bookId))
                 // Acknowledge the press immediately, even if the work is folded into a run that is
                 // already going: without this the button gives no sign it was hit.
                 repaintToolbar()

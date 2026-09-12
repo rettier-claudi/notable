@@ -37,6 +37,7 @@ import javax.inject.Singleton
 @Singleton
 class QuickPageSyncService @Inject constructor(
     private val appRepository: AppRepository,
+    private val sentMarkStore: dagger.Lazy<SentMarkStore>,
     @ApplicationContext private val context: Context,
 ) {
     private val log = SyncLogger
@@ -115,16 +116,27 @@ class QuickPageSyncService @Inject constructor(
 
         var deletedLocal = 0
         if (!uploadOnly && plan.deleteLocal.isNotEmpty()) {
-            if (looksLikeQuickPageWipe(plan.deleteLocal.size, rows.size)) {
+            // A sent (locked) page vanishing from the server is the expected end of its life --
+            // the consumer ingested it -- never evidence of a wipe. Only pages that were never
+            // sent count towards the guard, and only they are held back by it.
+            val marks = sentMarkStore.get()
+            marks.ensureLoaded()
+            val split = partitionQuickPageDeletions(
+                plan.deleteLocal,
+                lockedIds = localPages.filter { marks.isPageLocked(it.id) }.mapTo(HashSet()) { it.id },
+                rowIds = rows.keys,
+            )
+            if (split.refused.isNotEmpty()) {
                 // The server appearing to have dropped most of what we uploaded is far more likely
                 // to be our own misreading than an intentional bulk cleanup. Refuse and say so.
                 log.e(
                     TAG,
-                    "Refusing to delete ${plan.deleteLocal.size} of ${rows.size} quick pages: " +
-                        "that looks like a misread listing, not a server-side cleanup."
+                    "Refusing to delete ${split.refused.size} of ${split.unlockedRowCount} never-sent " +
+                        "quick pages: that looks like a misread listing, not a server-side cleanup."
                 )
-            } else {
-                for (pageId in plan.deleteLocal) {
+            }
+            run {
+                for (pageId in split.delete) {
                     try {
                         // Deleting a note because a *remote* file vanished is the one destructive
                         // step here, so it is reversible: the page is written out first and can be
@@ -213,9 +225,39 @@ internal fun String.jsonName() = "$this.json"
  * At least this many local deletions, and more than half of everything we ever uploaded, is treated
  * as a misread listing rather than a real server-side cleanup. Mirrors the notebook side's
  * [looksLikeStaleStateWipe]; the ordinary "the bridge ingested one or two notes" case stays below it.
+ * Counts never-sent pages only -- see [partitionQuickPageDeletions].
  */
 internal fun looksLikeQuickPageWipe(deletionCount: Int, rowCount: Int): Boolean =
     deletionCount >= 3 && deletionCount > rowCount / 2
+
+internal data class QuickPageDeletionSplit(
+    /** Pages to delete now: every locked one, plus the unlocked ones unless the guard tripped. */
+    val delete: List<String>,
+    /** Unlocked pages held back by the wipe guard (empty when it did not trip). */
+    val refused: List<String>,
+    /** Reference count the guard was measured against: uploaded pages that are not locked. */
+    val unlockedRowCount: Int,
+)
+
+/**
+ * Split the pages whose server file vanished into what is deleted and what the wipe guard holds
+ * back. Locked (sent) pages are always deleted: their removal from the server is the consumer's
+ * expected "ingested, done" and can legitimately come in any number at once. The guard
+ * ([looksLikeQuickPageWipe]) therefore counts only never-sent pages, against only never-sent rows.
+ */
+internal fun partitionQuickPageDeletions(
+    deleteLocal: List<String>,
+    lockedIds: Set<String>,
+    rowIds: Set<String>,
+): QuickPageDeletionSplit {
+    val (locked, unlocked) = deleteLocal.partition { it in lockedIds }
+    val unlockedRowCount = rowIds.count { it !in lockedIds }
+    return if (looksLikeQuickPageWipe(unlocked.size, unlockedRowCount)) {
+        QuickPageDeletionSplit(delete = locked, refused = unlocked, unlockedRowCount = unlockedRowCount)
+    } else {
+        QuickPageDeletionSplit(delete = locked + unlocked, refused = emptyList(), unlockedRowCount = unlockedRowCount)
+    }
+}
 
 /**
  * Pure planning step (unit-tested): which pages go up, which rows are stale, which pages go, which

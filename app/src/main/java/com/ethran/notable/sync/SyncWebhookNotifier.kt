@@ -144,7 +144,9 @@ class SyncWebhookNotifier @Inject constructor(
      * not retried here -- another round would fail the same way.
      */
     private suspend fun syncUntilOnServer(pageId: String?, notebookId: String?): SyncOutcome {
-        val request = SyncRequest.SyncAll
+        // The notebook is named so a round covers it even when it sits in a folder that the
+        // standard scope leaves alone (see SyncScope).
+        val request = SyncRequest.SyncAll(notebookId = notebookId)
         var last = SyncOutcome(finished = false, contentOnServer = false, notebookUpdatedAt = null)
         repeat(MAX_SYNC_ROUNDS) { round ->
             syncScheduler.triggerImmediateSyncAndAwait(request)

@@ -87,6 +87,11 @@ interface PageDao {
     @Query("SELECT * FROM page WHERE notebookId is null")
     suspend fun getAllSinglePages(): List<Page>
 
+    // No updatedAt stamp: a quick page's folder is not part of its content, and a locked (sent)
+    // page must not read as edited.
+    @Query("UPDATE page SET parentFolderId = NULL WHERE parentFolderId = :folderId")
+    suspend fun moveAllToRoot(folderId: String)
+
     @Query("SELECT * FROM page WHERE notebookId is null")
     fun getAllSinglePagesFlow(): kotlinx.coroutines.flow.Flow<List<Page>>
 

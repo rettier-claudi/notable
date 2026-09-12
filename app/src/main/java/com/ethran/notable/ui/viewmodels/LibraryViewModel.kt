@@ -7,6 +7,7 @@ import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
 import com.ethran.notable.data.AppRepository
 import com.ethran.notable.data.PageDataManager
+import com.ethran.notable.data.folderBar
 import com.ethran.notable.data.datastore.GlobalAppSettings
 import com.ethran.notable.data.db.Folder
 import com.ethran.notable.data.db.Notebook
@@ -48,7 +49,7 @@ data class LibraryUiState(
     val folderId: String? = null,
     val isLatestVersion: Boolean = true,
     val isImporting: Boolean = false,
-    val breadcrumbFolders: List<Folder> = emptyList(),
+    /** The folder bar: root folders in bar order (plus the path to a nested current folder). */
     val folders: List<Folder> = emptyList(),
     val books: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
@@ -111,11 +112,11 @@ class LibraryViewModel @Inject constructor(
     private val _newlyCreatedBookId = MutableStateFlow<String?>(null)
     val newlyCreatedBookId: StateFlow<String?> = _newlyCreatedBookId
     private val _isLatestVersion = MutableStateFlow(true)
-    private val _breadcrumbFolders = MutableStateFlow<List<Folder>>(emptyList())
 
-    // 1. Convert LiveData to Flow and switch automatically when folderId changes
+    // 1. Convert LiveData to Flow and switch automatically when folderId changes.
+    // The folder bar always shows the root folders, whatever folder is open (see folderBar).
     private val _foldersFlow =
-        _folderId.flatMapLatest { id -> folderRepository.getAllInFolder(id).asFlow() }
+        combine(_folderId, folderRepository.getAllLive().asFlow()) { id, all -> folderBar(all, id) }
     private val _booksFlow =
         _folderId.flatMapLatest { id -> bookRepository.getAllInFolder(id).asFlow() }
     private val _singlePagesFlow =
@@ -140,13 +141,12 @@ class LibraryViewModel @Inject constructor(
 
     // 3. Expose the final UI State
     val uiState: StateFlow<LibraryUiState> = combine(
-        _folderId, _isLatestVersion, _isImporting, _breadcrumbFolders, _dbDataFlow
-    ) { folderId, isLatestVersion, isImporting, breadcrumbs, dbData ->
+        _folderId, _isLatestVersion, _isImporting, _dbDataFlow
+    ) { folderId, isLatestVersion, isImporting, dbData ->
         LibraryUiState(
             folderId = folderId,
             isLatestVersion = isLatestVersion,
             isImporting = isImporting,
-            breadcrumbFolders = breadcrumbs,
             folders = dbData.folders,
             books = dbData.books,
             singlePages = dbData.singlePages,
@@ -195,9 +195,23 @@ class LibraryViewModel @Inject constructor(
         initialValue = HomeSyncStatus()
     )
 
-    /** Home-screen "sync now": the same WorkManager funnel as the settings button. */
+    /**
+     * Home-screen "sync now": the same WorkManager funnel as the settings button. In the root it
+     * is the standard round (root + "Heute" + dirty); inside a folder it syncs exactly that folder.
+     */
     fun onSyncNow() {
-        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll)
+        syncScheduler.triggerImmediateSync(SyncRequest.SyncAll(folderId = _folderId.value))
+    }
+
+    /**
+     * Delete a folder (Room cascades to its notebooks and quick pages, as upstream does) and put a
+     * folder tombstone on the server, so the other side drops it instead of restoring it.
+     */
+    fun deleteFolder(folderId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            folderRepository.delete(folderId)
+            syncScheduler.triggerImmediateSync(SyncRequest.UploadFolderDeletion(folderId))
+        }
     }
 
     init {
@@ -214,35 +228,12 @@ class LibraryViewModel @Inject constructor(
     fun loadFolder(folderId: String?) {
         pageDataManager.cancelLoadingPages()
         _folderId.value = folderId
-
-        // Resolve breadcrumbs in background thread
-        viewModelScope.launch(Dispatchers.IO) {
-            _breadcrumbFolders.value = resolveBreadcrumbs(folderId)
-        }
     }
 
-    private suspend fun resolveBreadcrumbs(folderId: String?): List<Folder> {
-        if (folderId == null) return emptyList()
-
-        val list = mutableListOf<Folder>()
-        var currentId: String? = folderId
-
-        while (currentId != null) {
-            val folder = folderRepository.get(currentId)
-            if (folder != null) {
-                list.add(folder)
-                currentId = folder.parentFolderId
-            } else {
-                currentId = null
-            }
-        }
-        return list.reversed()
-    }
-
+    /** New folders are always root folders: the bar offers no nesting. */
     fun createNewFolder() {
         viewModelScope.launch(Dispatchers.IO) {
-            val folder = Folder(parentFolderId = _folderId.value)
-            folderRepository.create(folder)
+            folderRepository.create(Folder(parentFolderId = null))
         }
     }
 

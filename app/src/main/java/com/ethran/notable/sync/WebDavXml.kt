@@ -99,6 +99,12 @@ internal object WebDavXml {
     fun isValidUuid(name: String): Boolean =
         name.length == 36 && name[8] == '-' && name[13] == '-' && name[18] == '-' && name[23] == '-'
 
+    /** A notebook tombstone (`<uuid>`) or a folder tombstone (`folder-<uuid>`); nothing else. */
+    fun isTombstoneName(name: String): Boolean =
+        isValidUuid(name) ||
+            (name.startsWith(SyncPaths.FOLDER_TOMBSTONE_PREFIX) &&
+                isValidUuid(name.removePrefix(SyncPaths.FOLDER_TOMBSTONE_PREFIX)))
+
     private fun newParser(xml: String): XmlPullParser {
         val factory = XmlPullParserFactory.newInstance()
         factory.isNamespaceAware = true

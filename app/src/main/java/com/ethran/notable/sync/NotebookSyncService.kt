@@ -90,17 +90,31 @@ class NotebookSyncService @Inject constructor(
 ) {
     private val log = SyncLogger
 
+    /**
+     * Apply the server's notebook tombstones locally and return every tombstone the listing had —
+     * notebook ids (used to suppress re-downloading them as "new") and folder tombstones with their
+     * deletion time (applied by [FolderSyncService], which needs them *before* its merge so a
+     * deleted folder is not first re-uploaded from the local copy and only then deleted).
+     */
     suspend fun applyRemoteDeletions(
         client: WebDAVClient,
         maxAgeDays: Long
-    ): AppResult<Set<String>, DomainError> {
+    ): AppResult<RemoteTombstones, DomainError> {
         log.i(TAG, "Applying remote deletions...")
         val tombstonesPath = SyncPaths.tombstonesDir()
 
         // No existence HEAD first: listCollectionWithMetadata reports a missing collection as an
         // empty list, and on nginx the HEAD cost two round trips (301 to the trailing-slash form).
-        return client.listCollectionWithMetadata(tombstonesPath).flatMap { tombstones ->
+        return client.listCollectionWithMetadata(tombstonesPath, keep = WebDavXml::isTombstoneName)
+            .flatMap { allTombstones ->
+            val folderTombstones = allTombstones
+                .filter { it.name.startsWith(SyncPaths.FOLDER_TOMBSTONE_PREFIX) }
+                .associate { it.name.removePrefix(SyncPaths.FOLDER_TOMBSTONE_PREFIX) to it.lastModified }
+            val tombstones = allTombstones.filter { !it.name.startsWith(SyncPaths.FOLDER_TOMBSTONE_PREFIX) }
             val tombstonedIds = tombstones.map { it.name }.toSet()
+            if (folderTombstones.isNotEmpty()) {
+                log.i(TAG, "Server has ${folderTombstones.size} folder tombstone(s)")
+            }
             val errors = ErrorAccumulator()
 
             if (tombstones.isNotEmpty()) {
@@ -152,7 +166,7 @@ class NotebookSyncService @Inject constructor(
 
             val cutoff = Date(System.currentTimeMillis() - maxAgeDays * 86_400_000L)
             val stale =
-                tombstones.filter { it.lastModified != null && it.lastModified.before(cutoff) }
+                allTombstones.filter { it.lastModified != null && it.lastModified.before(cutoff) }
             if (stale.isNotEmpty()) {
                 log.i(TAG, "Pruning ${stale.size} stale tombstone(s) older than $maxAgeDays days")
                 for (entry in stale) {
@@ -162,7 +176,7 @@ class NotebookSyncService @Inject constructor(
                 }
             }
 
-            errors.asResult(tombstonedIds)
+            errors.asResult(RemoteTombstones(tombstonedIds, folderTombstones))
         }
     }
 
@@ -1082,10 +1096,10 @@ class NotebookSyncService @Inject constructor(
 
         // 2. Deserialize manifest (Early Return on corrupted JSON)
         val manifestJson = manifestFile.content.decodeToString()
-        val notebook = NotebookSerializer.deserializeManifest(manifestJson)
+        val manifestNotebook = NotebookSerializer.deserializeManifest(manifestJson)
             .onFailure { return AppResult.Error(it) }
 
-        log.i(TAG, "Found notebook: ${notebook.title} (${notebook.pageIds.size} pages)")
+        log.i(TAG, "Found notebook: ${manifestNotebook.title} (${manifestNotebook.pageIds.size} pages)")
 
         // 3. Ensure a notebook row exists so page foreign keys resolve, but do NOT advance its
         //    commit timestamp yet. A brand-new notebook is inserted with an epoch-0 timestamp so a
@@ -1097,6 +1111,17 @@ class NotebookSyncService @Inject constructor(
         // download instead of resetting it.
         val existingBook = appRepository.bookRepository.getById(notebookId)
         val isNew = existingBook == null
+        // A manifest may point at a folder this device does not have (folders.json lost the
+        // write, or the folder was deleted here and the tombstone has not landed yet). Room's
+        // foreign key would reject the row; put the notebook in the root instead and say so. The
+        // timestamp stays the remote one, so nothing is re-uploaded over it.
+        val parentFolderId = manifestNotebook.parentFolderId?.takeIf {
+            appRepository.folderRepository.get(it) != null
+        }
+        if (parentFolderId != manifestNotebook.parentFolderId) {
+            log.w(TAG, "Folder ${manifestNotebook.parentFolderId} of ${manifestNotebook.title} is unknown here; placing it in the root")
+        }
+        val notebook = manifestNotebook.copy(parentFolderId = parentFolderId)
         if (isNew) {
             try {
                 appRepository.bookRepository.createEmpty(notebook.copy(updatedAt = Date(0)))
@@ -1406,3 +1431,10 @@ internal fun canReuseMovedEtag(
     clientServerKey: String
 ): Boolean = capabilities?.movePreservesEtag == true &&
     capabilities.serverKey == clientServerKey
+
+/** What the `deletions/` listing said: notebook tombstone ids and folder tombstones with their time. */
+data class RemoteTombstones(
+    val notebookIds: Set<String>,
+    /** Folder id -> server `Last-Modified` of its tombstone (null if the server omitted it). */
+    val folders: Map<String, Date?>,
+)

@@ -39,9 +39,22 @@ class NotebookReconciliationService @Inject constructor(
         bulkEnabled: Boolean = false,
         currentServerKey: String? = null,
         dirEtags: Map<String, ETag?> = emptyMap(),
+        scope: SyncScope = SyncScope(),
     ): AppResult<Set<String>, DomainError> {
-        val localNotebooks = appRepository.bookRepository.getAll()
-        val preDownloadNotebookIds = localNotebooks.map { it.id }.toSet()
+        val allLocal = appRepository.bookRepository.getAll()
+        // The returned snapshot is EVERY local notebook, scope or not: local-deletion detection and
+        // new-notebook discovery compare against it, and a notebook left out of this round's
+        // manifest checks is still local.
+        val preDownloadNotebookIds = allLocal.map { it.id }.toSet()
+        val rows = allLocal.mapNotNull { appRepository.notebookSyncStateRepository.get(it.id) }
+            .associateBy { it.notebookId }
+        val localNotebooks = selectNotebooksInScope(
+            allLocal, appRepository.folderRepository.getAll(), scope, rows
+        )
+        log.i(
+            TAG,
+            "Scope ${scope.describe()}: ${localNotebooks.size} of ${allLocal.size} local notebook(s)"
+        )
         val total = localNotebooks.size
         val errors = ErrorAccumulator()
 

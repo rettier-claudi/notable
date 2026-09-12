@@ -5,6 +5,10 @@
     <string name="home_add_new_folder">Add new folder</string>
     <string name="home_new_folder">New Folder</string>
     <string name="home_view_name">Library</string>
+    <!-- The root of the library, shown as a folder of its own in the folder bar and breadcrumbs. -->
+    <string name="home_root_folder">Ablage</string>
+    <string name="home_new_folder_button">New folder</string>
+    <string name="home_import_file">Open file</string>
     <string name="settings_title">Settings</string>
     <string name="settings_tab_general_name">General</string>
     <string name="settings_tab_gestures_name">Gestures</string>

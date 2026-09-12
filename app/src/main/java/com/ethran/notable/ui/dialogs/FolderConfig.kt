@@ -44,9 +44,16 @@ import kotlinx.coroutines.launch
 private val log = ShipBook.getLogger("FolderConfig")
 
 @Composable
-fun FolderConfigDialog(folderRepository: FolderRepository,
-                       folderId: String,
-                       onClose: () -> Unit) {
+fun FolderConfigDialog(
+    folderRepository: FolderRepository,
+    folderId: String,
+    onClose: () -> Unit,
+    /**
+     * Delete handler. The default is the plain local delete (cascades); the home screen passes one
+     * that also puts a folder tombstone on the server.
+     */
+    onDelete: (() -> Unit)? = null,
+) {
     val scope = rememberCoroutineScope()
     var folder by remember { mutableStateOf<Folder?>(null) }
     var folderTitle by remember { mutableStateOf("") }
@@ -124,7 +131,10 @@ fun FolderConfigDialog(folderRepository: FolderRepository,
                                     val currentFolder = folder
                                     if (currentFolder != null && currentFolder.title != folderTitle) {
                                         scope.launch {
-                                            folderRepository.update(currentFolder.copy(title = folderTitle))
+                                            // rename() stamps updatedAt, or the server's copy of
+                                            // the title would win the next folders.json merge.
+                                            folderRepository.rename(currentFolder, folderTitle)
+                                            folder = currentFolder.copy(title = folderTitle)
                                         }
                                     }
                                 }
@@ -151,9 +161,13 @@ fun FolderConfigDialog(folderRepository: FolderRepository,
                     text = "Delete Folder",
                     textAlign = TextAlign.Center,
                     modifier = Modifier.noRippleClickable {
-                        scope.launch {
-                            folderRepository.delete(folderId)
-                            onClose()
+                        if (onDelete != null) {
+                            onDelete()
+                        } else {
+                            scope.launch {
+                                folderRepository.delete(folderId)
+                                onClose()
+                            }
                         }
                     })
             }

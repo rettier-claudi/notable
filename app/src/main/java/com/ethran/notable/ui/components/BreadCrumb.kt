@@ -36,7 +36,7 @@ fun BreadCrumb(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = stringResource(R.string.home_view_name),
+            text = stringResource(R.string.home_root_folder),
             fontSize = fontSize.sp,
             textDecoration = TextDecoration.Underline,
             maxLines = 1,
