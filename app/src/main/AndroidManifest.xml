@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <!-- Partial wake lock + Wi-Fi lock for the duration of a sync round (SyncPowerGuard). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
         android:name=".NotableApp"

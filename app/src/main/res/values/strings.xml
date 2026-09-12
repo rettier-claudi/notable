@@ -1,12 +1,12 @@
 <resources>
     <string name="app_name" translatable="false">Notable</string>
-    <string name="home_quick_pages">Quick pages</string>
+    <string name="home_quick_pages">Scratch notes</string>
     <string name="home_notebooks">Notebooks</string>
     <string name="home_add_new_folder">Add new folder</string>
     <string name="home_new_folder">New Folder</string>
     <string name="home_view_name">Library</string>
     <!-- The root of the library, shown as a folder of its own in the folder bar and breadcrumbs. -->
-    <string name="home_root_folder">Ablage</string>
+    <string name="home_root_folder">Workspace</string>
     <string name="home_new_folder_button">New folder</string>
     <string name="home_import_file">Open file</string>
     <string name="settings_title">Settings</string>
@@ -148,8 +148,8 @@
     <string name="home_sync_conflict">Conflict — see notebook</string>
     <string name="home_sync_offline">Offline</string>
     <string name="sync_on_app_close_label">Sync when leaving the app (home button, app switch)</string>
-    <string name="sync_quick_pages_label">Sync quick pages (upload only; a page removed on the server is removed here)</string>
-    <string name="sync_quick_pages_hint">Quick pages go to quickpages/ on the server as they change. Nothing is downloaded — except a deletion: when the server side has taken a page and removed it, it disappears here too (unless you edited it since, then it is uploaded again).</string>
+    <string name="sync_quick_pages_label">Sync scratch notes (upload only; a note removed on the server is removed here)</string>
+    <string name="sync_quick_pages_hint">Scratch notes go to quickpages/ on the server as they change. Nothing is downloaded — except a deletion: when the server side has taken a note and removed it, it disappears here too (unless you edited it since, then it is uploaded again).</string>
     <string name="sync_webhook_url_label">Notify URL (toolbar ”sync and notify”)</string>
     <string name="sync_webhook_url_hint">Optional. The toolbar\'s ”sync and notify” button runs a sync and then sends an HTTP POST with a small JSON body to this URL. Leave empty to hide the button.</string>
     <string name="toolbar_element_sync">Sync status / sync now</string>

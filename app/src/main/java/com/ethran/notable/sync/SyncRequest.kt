@@ -5,9 +5,9 @@ import androidx.work.Data
 sealed class SyncRequest {
     /**
      * A full sync round. Its *scope* — which notebooks get a manifest check — is decided by
-     * [SyncScope]: by default the root ("Ablage") and the folder titled [ALWAYS_SYNCED_FOLDER_TITLE],
-     * plus anything locally dirty. [folderId] narrows the round to one folder (the home screen's
-     * sync button inside a folder); [notebookId] adds one notebook regardless of its folder (the
+     * [SyncScope]: by default the root ("Workspace") and the folder titled [ALWAYS_SYNCED_FOLDER_TITLE]
+     * with its subfolders, plus anything locally dirty. [folderId] narrows the round to one folder
+     * and its subfolders (the home screen's sync button inside a folder); [notebookId] adds one notebook regardless of its folder (the
      * editor's sync button and "Send", so a notebook in an old folder still gets there).
      * All variants share one unique work name: a round already running satisfies the request.
      */

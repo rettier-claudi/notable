@@ -36,6 +36,7 @@ class SyncOrchestrator @Inject constructor(
     private val quickPageSyncService: QuickPageSyncService,
     private val webDavClientFactory: WebDavClientFactoryPort,
     private val reporter: SyncProgressReporter,
+    private val powerGuard: SyncPowerGuard,
     @param:ApplicationScope private val appScope: CoroutineScope,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
@@ -46,7 +47,11 @@ class SyncOrchestrator @Inject constructor(
      * checked (see [SyncScope]); folders, tombstones, new remote notebooks, local deletions and
      * quick pages are handled in every round.
      */
-    suspend fun syncAllNotebooks(scope: SyncScope = SyncScope()): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
+    suspend fun syncAllNotebooks(scope: SyncScope = SyncScope()): AppResult<Unit, DomainError> =
+        powerGuard.hold("full") { syncAllNotebooksUnguarded(scope) }
+
+    /** [syncAllNotebooks] without the wake/Wi-Fi locks ([SyncPowerGuard]) around it. */
+    private suspend fun syncAllNotebooksUnguarded(scope: SyncScope): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
         if (!syncMutex.tryLock()) {
             log.w(TAG, "Sync already in progress, skipping")
             return@withContext AppResult.Error(DomainError.SyncInProgress)
@@ -222,7 +227,7 @@ class SyncOrchestrator @Inject constructor(
             // Quick pages: one-way up, deletions down. Never fails the run; its errors are
             // logged and the notebooks' result stands.
             if (settings.syncQuickPages && !downloadOnly) {
-                reporter.beginStep(SyncStep.FINALIZING, PROGRESS_FINALIZING, "Syncing quick pages...")
+                reporter.beginStep(SyncStep.FINALIZING, PROGRESS_FINALIZING, "Syncing scratch notes...")
                 // Logged, never promoted to a run failure: the notebooks synced fine, and a
                 // transient quick-page problem retries on the next round anyway. Promoting it
                 // turned every hiccup into a "Sync failed" snack.
@@ -298,6 +303,9 @@ class SyncOrchestrator @Inject constructor(
     }
 
     suspend fun syncNotebook(notebookId: String): AppResult<Unit, DomainError> =
+        powerGuard.hold("notebook") { syncNotebookUnguarded(notebookId) }
+
+    private suspend fun syncNotebookUnguarded(notebookId: String): AppResult<Unit, DomainError> =
         withContext(ioDispatcher) {
             // Actually hold the mutex for the whole operation. A bare isLocked check is
             // check-then-act: it let a sync-on-close race a full/periodic sync. Skip-if-busy

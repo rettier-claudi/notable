@@ -60,10 +60,52 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
-- **Sync scope: the root and "Heute", not every notebook** (v0.2.6-claudi.7). A full round —
+- **Names on screen: "Scratch notes", "Workspace", "Today"** (v0.2.6-claudi.8). What upstream
+  calls *Quick pages* is *Scratch notes* everywhere in the UI (home screen row, settings, sync
+  log lines); the root of the library is *Workspace* (was *Ablage*); the always-synced folder is
+  the root folder titled `Today` (was `Heute`). Internal names are unchanged on purpose:
+  `quickpages/` on the server, `QuickPage…` in the code, `home_quick_pages` in the resources — the
+  sync protocol does not know about the rename. **What the server side has to know:**
+  - The always-synced folder is matched by **title**, case- and whitespace-insensitive, among the
+    **root** folders only. Accepted titles: `Today` and, as an alias for the transition, `Heute`
+    (`ALWAYS_SYNCED_FOLDER_TITLES`). A subfolder called `Today` somewhere else does not count.
+  - **Subfolders of `Today` are in the default scope**, however deep: the server side creates
+    `Today/Scratch notes` and `Today/Notebooks` (`parentFolderId` = the id of `Today`, ordinary
+    entries in `folders.json`), and the same two below each day folder `dd.mm.yyyy`. A notebook
+    in any of them gets its conditional manifest GET every round, exactly like one in the root;
+    when the day folder is renamed away from `Today` at night its subfolders leave the scope with
+    it (same ids, new parent title). The home screen's sync button inside a folder syncs that
+    folder *and* its subfolders.
+  - The folder bar sorts `Today` / `Heute` first, `Yesterday` / `Gestern` second, then
+    `dd.mm.yyyy` newest first, then the rest alphabetically — root folders only. Inside `Today`
+    (or a day folder) the bar continues with that folder's subfolders, alphabetical, drawn with a
+    "↳" icon; inside `Today/Scratch notes` both siblings stay visible with the open one filled.
+    Subfolders are only ever displayed and opened; *New folder* still creates a root folder.
+- **Sync round holds a wake lock and a Wi-Fi lock; the leave-the-app round runs in-process**
+  (v0.2.6-claudi.8). Every full round and every single-notebook round takes a partial
+  `WakeLock` and a `WifiManager.WifiLock` (`WIFI_MODE_FULL_LOW_LATENCY`) for its duration
+  (`SyncPowerGuard`, released in `finally`, 5-minute backstop timeout), and the round started
+  when the app leaves the screen no longer goes through WorkManager but runs at once in the
+  application scope, locks held from the first millisecond. Why: with the system's *turn Wi-Fi
+  off in sleep* on, the round that starts as the tablet goes to sleep lost the race against the
+  radio. **What this can and cannot do:** the locks stop the *framework* from powering the radio
+  down and the process from being frozen mid-round, and cut the WorkManager start latency to
+  zero; they cannot stop a firmware that explicitly disables Wi-Fi from its own power manager —
+  Android does not let an app veto that, and Onyx's SDK offers no lock either (its `wifiLock` /
+  `setWifiLockTimeout` on `BaseDevice` are empty stubs, `WifiAdmin.setWifiEnabled` is the plain
+  framework call, which is a no-op for apps targeting Android 10+). **Not built, on purpose:** a
+  "switch Wi-Fi off N minutes after sleep" setting. `WifiManager.setWifiEnabled` is dead for this
+  app (targetSdk 35; only `targetSdk` ≤ 28 or a system/device-owner app may still call it), the
+  firmware's own sleep/Wi-Fi timeouts live behind `android.onyx.hardware.DeviceController`
+  (standby and power-off timeouts only, reached via reflection) and `WRITE_SECURE_SETTINGS`,
+  neither of which a sideloaded app has. If the in-process round still loses on the device, the
+  fix is on the system side: keep Wi-Fi on in sleep (Boox *Settings → Power*), and let the
+  device's own inactivity timeouts handle the battery.
+- **Sync scope: the root and "Today", not every notebook** (v0.2.6-claudi.7; folder names and
+  subfolders as of claudi.8 above). A full round —
   wake-up, activity, leaving the app, the periodic job, the home screen's sync button in the
-  root — checks the manifests of the notebooks in the root ("Ablage") and in the folder titled
-  `Heute` only, plus any notebook with local changes not yet on the server (never synced, edited
+  root — checks the manifests of the notebooks in the root ("Workspace") and in the folder titled
+  `Today` (then `Heute`) only, plus any notebook with local changes not yet on the server (never synced, edited
   since, last sync in error) — pushing costs requests only when there is something to push, so a
   book moved out of `Heute` still gets its move up. The folder is matched by **title**, not id,
   because the server renames its day folders every night (`Heute` → `Gestern` → `dd.mm.yyyy`).
@@ -111,8 +153,9 @@ the `upstream` remote and merged in as it moves.
   webhook for, `notebookId: null`, `syncSucceeded: true`); for pages it ingested without a send
   the old limit of two per device round still applies.
 - **Folder bar instead of breadcrumb + folder list** (v0.2.6-claudi.7): the home screen and every
-  folder show the same bar at the top — *Ablage* (the root) and every root folder, the open one
-  filled black; tap to switch, long-press a folder for rename/delete. Order: `Heute`, `Gestern`,
+  folder show the same bar at the top — *Workspace* (the root; *Ablage* until claudi.7) and every
+  root folder, the open one filled black; tap to switch, long-press a folder for rename/delete.
+  Order: `Today`, `Yesterday` (German titles accepted),
   day folders `dd.mm.yyyy` newest first, then the rest alphabetically (Room's insertion order
   was meaningless once folders get renamed in place). No nesting is offered: *New folder* always
   creates a root folder; a nested folder from before is still reachable (its path and children are

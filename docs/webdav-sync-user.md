@@ -91,7 +91,7 @@ and time if necessary.
 | **Sync on app start** | Schedules a full sync when Notable's main screen starts. |
 | **Sync when the app comes back to the foreground** | Schedules a full sync when Notable resumes after the device slept or you switched apps. At most one request per 30 seconds, skipped while offline. |
 | **Sync when leaving the app** | Schedules a full sync when Notable leaves the screen (home button, app switch, sleep). Not rate-limited. |
-| **Sync quick pages** | Uploads pages without a notebook to `quickpages/` (one-way). A page file removed on the server removes the page on the device unless it was edited since its last upload. |
+| **Sync scratch notes** | Uploads scratch notes (pages without a notebook, `quickpages/` on the server) one-way. A page file removed on the server removes the page on the device unless it was edited since its last upload. |
 | **Notify URL** | Optional. The toolbar's "sync and notify" button syncs, waits, then POSTs a JSON body to this URL. |
 | **Sync after inactivity of … minutes** | One sync that many minutes after your last activity in the app (0 = off). Only while Notable is on screen. |
 | **Sync when returning after … minutes** | When you touch the app again after at least that much quiet, sync once (0 = off). |

@@ -132,8 +132,9 @@ acquire the lock, it returns `SyncInProgress` rather than queueing behind the ru
         union, so an unguarded write cannot drop a remote folder)
        (if the file is absent, non-empty local folders are uploaded unless download-only)
 
-4. SYNC LOCAL NOTEBOOKS IN SCOPE  (`SyncScope`: root + the folder titled "Heute" by default, or
-   one folder; always plus the named notebook and every locally dirty notebook)
+4. SYNC LOCAL NOTEBOOKS IN SCOPE  (`SyncScope`: root + the root folder titled "Today" (alias
+   "Heute") with all its subfolders by default, or one folder with its subfolders; always plus
+   the named notebook and every locally dirty notebook)
    └── For each local notebook in scope (per-item progress carries the notebook id):
        ├── Existence = "id in the shared PROPFIND set?" (no per-notebook HEAD)
        ├── If remote absent → upload, unless download-only is enabled

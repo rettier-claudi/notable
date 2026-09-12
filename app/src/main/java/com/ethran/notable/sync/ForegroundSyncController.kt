@@ -4,6 +4,8 @@ import android.content.Context
 import com.ethran.notable.data.db.KvProxy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.shipbook.shipbooksdk.Log
+import com.ethran.notable.di.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -30,6 +32,8 @@ class ForegroundSyncController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val kvProxy: KvProxy,
     private val syncScheduler: SyncScheduler,
+    private val syncOrchestrator: dagger.Lazy<SyncOrchestrator>,
+    @param:ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val connectivity by lazy { ConnectivityChecker(context) }
 
@@ -39,8 +43,13 @@ class ForegroundSyncController @Inject constructor(
     /**
      * Trigger a full sync unless one was requested less than [MIN_GAP_MS] ago or we are offline.
      * [force] skips the rate limit (used when leaving the app: that sync must not be dropped).
+     * [inProcess] runs the round right here in the application scope instead of through
+     * WorkManager: no scheduler latency, and the orchestrator's wake/Wi-Fi locks are taken at
+     * once — for the round that races the device going to sleep. The WorkManager path keeps its
+     * retries and result snacks; the in-process one has neither (nobody is looking, and the next
+     * resume/periodic round is the retry).
      */
-    suspend fun requestSync(reason: String, force: Boolean = false): Boolean {
+    suspend fun requestSync(reason: String, force: Boolean = false, inProcess: Boolean = false): Boolean {
         val settings = try {
             kvProxy.getSyncSettings()
         } catch (e: Exception) {
@@ -63,6 +72,18 @@ class ForegroundSyncController @Inject constructor(
             return false
         }
         lastRequestAt = now
+        if (inProcess) {
+            Log.i(TAG, "Running sync in-process ($reason)")
+            appScope.launch {
+                try {
+                    val result = syncOrchestrator.get().syncAllNotebooks(SyncScope())
+                    Log.i(TAG, "In-process sync ($reason) finished: $result")
+                } catch (e: Exception) {
+                    Log.w(TAG, "In-process sync ($reason) failed: ${e.message}")
+                }
+            }
+            return true
+        }
         Log.i(TAG, "Triggering sync ($reason)")
         syncScheduler.triggerImmediateSync(SyncRequest.SyncAll())
         return true
@@ -80,8 +101,11 @@ class ForegroundSyncController @Inject constructor(
     }
 
     /**
-     * Called from the activity's onStop (app left the screen). Not rate-limited: the user may have
-     * written something in the last seconds, and the process may be frozen soon after.
+     * Called from the activity's onStop (app left the screen — home button, app switch, or the
+     * tablet going to sleep). Not rate-limited: the user may have written something in the last
+     * seconds, and the process may be frozen soon after. Runs in-process so the round starts
+     * now, with CPU and Wi-Fi held, rather than whenever WorkManager gets to it — on the way into
+     * sleep every second counts against the system's own "Wi-Fi off in sleep".
      */
     suspend fun onAppStopped() {
         val settings = try {
@@ -90,7 +114,7 @@ class ForegroundSyncController @Inject constructor(
             return
         }
         if (!settings.syncOnAppClose) return
-        requestSync("app close", force = true)
+        requestSync("app close", force = true, inProcess = true)
     }
 
     /**

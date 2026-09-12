@@ -197,7 +197,8 @@ class LibraryViewModel @Inject constructor(
 
     /**
      * Home-screen "sync now": the same WorkManager funnel as the settings button. In the root it
-     * is the standard round (root + "Heute" + dirty); inside a folder it syncs exactly that folder.
+     * is the standard round (root + "Today" with subfolders + dirty); inside a folder it syncs that
+     * folder and its subfolders.
      */
     fun onSyncNow() {
         syncScheduler.triggerImmediateSync(SyncRequest.SyncAll(folderId = _folderId.value))

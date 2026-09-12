@@ -46,7 +46,7 @@ fun ShowPagesRow(
     appRepository: AppRepository,
     pages: List<Page>?,
     currentPageId: String? = null,
-    title: String? = "Quick Pages",
+    title: String? = "Scratch notes",
     onSelectPage: (String) -> Unit,
     showAddQuickPage: Boolean = false,
     onCreateNewQuickPage: () -> Unit = {},
@@ -67,7 +67,7 @@ fun ShowPagesRow(
             .fillMaxWidth()
             .autoEInkAnimationOnScroll()
     ) {
-        // Add the "Add quick page" button
+        // Add the "Add scratch note" button
         if (showAddQuickPage) {
             item {
                 Box(
@@ -82,7 +82,7 @@ fun ShowPagesRow(
                         }) {
                     Icon(
                         imageVector = FeatherIcons.FilePlus,
-                        contentDescription = "Add Quick Page",
+                        contentDescription = "Add scratch note",
                         tint = Color.Gray,
                         modifier = Modifier.size(40.dp),
                     )

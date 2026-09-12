@@ -76,6 +76,7 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertTriangle
 import compose.icons.feathericons.Check
 import compose.icons.feathericons.FilePlus
+import compose.icons.feathericons.CornerDownRight
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.FolderPlus
 import compose.icons.feathericons.Home
@@ -333,9 +334,10 @@ fun ImportFileButton(onImportPdf: (Uri, Boolean) -> Unit, onImportXopp: (Uri) ->
 }
 
 /**
- * The folder bar: "Ablage" (the root) and the root folders, in [sortFoldersForBar] order, the
- * open one filled black. Tapping switches; long-pressing a folder opens its settings (rename,
- * delete). Fixed height on purpose (see [LibraryContent]). No nesting is offered here.
+ * The folder bar: "Workspace" (the root) and the root folders, in [sortFoldersForBar] order, the
+ * open one filled black, plus the subfolders along the path to the open folder (see [folderBar]).
+ * Tapping switches; long-pressing a folder opens its settings (rename, delete). Fixed height on
+ * purpose (see [LibraryContent]). New folders are always created in the root.
  */
 @Composable
 fun FolderBar(
@@ -380,7 +382,9 @@ fun FolderBar(
             )
             FolderChip(
                 title = folder.title,
-                icon = FeatherIcons.Folder,
+                // A subfolder (Today/Scratch notes, Today/Notebooks, created by the server side)
+                // is shown indented by its icon; the app itself only creates root folders.
+                icon = if (folder.parentFolderId == null) FeatherIcons.Folder else FeatherIcons.CornerDownRight,
                 selected = folder.id == currentFolderId,
                 onClick = { onNavigateToFolder(folder.id) },
                 onLongClick = { isFolderSettingsOpen = true },

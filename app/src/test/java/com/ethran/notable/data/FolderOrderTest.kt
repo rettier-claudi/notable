@@ -30,8 +30,8 @@ class FolderOrderTest {
 
     @Test
     fun heute_and_gestern_match_loosely_and_almost_dates_are_plain_titles() {
-        val folders = listOf(f("a", "12.9.2026"), f("b", " heute"), f("c", "GESTERN"))
-        assertEquals(listOf(" heute", "GESTERN", "12.9.2026"), sortFoldersForBar(folders).map { it.title })
+        val folders = listOf(f("a", "12.9.2026"), f("b", " today"), f("c", "YESTERDAY"))
+        assertEquals(listOf(" today", "YESTERDAY", "12.9.2026"), sortFoldersForBar(folders).map { it.title })
     }
 
     @Test
@@ -51,6 +51,33 @@ class FolderOrderTest {
         assertEquals(listOf("h", "n", "sub", "subsub", "sib"), folderBar(all, currentId = "sub").map { it.id })
         // Inside a root folder with children: children are appended so they stay reachable.
         assertEquals(listOf("h", "n", "sub"), folderBar(all, currentId = "n").map { it.id })
+    }
+
+    @Test
+    fun today_and_yesterday_in_english_or_german_lead_the_bar() {
+        // Both spellings share a group; within it the id breaks the tie (stable, not meaningful).
+        val folders = listOf(f("d", "Gestern"), f("a", "Today"), f("c", "Yesterday"), f("b", "Heute"), f("e", "11.09.2026"))
+        assertEquals(
+            listOf("Today", "Heute", "Yesterday", "Gestern", "11.09.2026"),
+            sortFoldersForBar(folders).map { it.title }
+        )
+    }
+
+    @Test
+    fun subfolders_of_today_do_not_disturb_the_root_order_and_appear_only_inside_today() {
+        val all = listOf(
+            f("n", "New Folder"), f("t", "Today"), f("y", "Yesterday"), f("d", "11.09.2026"),
+            f("t-scratch", "Scratch notes", parent = "t"), f("t-books", "Notebooks", parent = "t"),
+            f("d-scratch", "Scratch notes", parent = "d"), f("d-books", "Notebooks", parent = "d"),
+        )
+        // Root: "Notebooks"/"Scratch notes" never show up between the root folders.
+        assertEquals(listOf("t", "y", "d", "n"), folderBar(all, currentId = null).map { it.id })
+        // Inside Today: root folders, then Today's own subfolders, alphabetical.
+        assertEquals(listOf("t", "y", "d", "n", "t-books", "t-scratch"), folderBar(all, currentId = "t").map { it.id })
+        // Inside Today/Scratch notes: the siblings stay visible (the open one is highlighted by the UI).
+        assertEquals(listOf("t", "y", "d", "n", "t-books", "t-scratch"), folderBar(all, currentId = "t-scratch").map { it.id })
+        // Inside a day folder: that day's subfolders, not Today's.
+        assertEquals(listOf("t", "y", "d", "n", "d-books", "d-scratch"), folderBar(all, currentId = "d").map { it.id })
     }
 
     @Test

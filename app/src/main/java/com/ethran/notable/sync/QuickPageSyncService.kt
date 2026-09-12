@@ -64,14 +64,14 @@ class QuickPageSyncService @Inject constructor(
         val remoteNames: Set<String>? = client.listNames(dir).fold(
             onSuccess = { it.toSet() },
             onError = { error ->
-                log.w(TAG, "Quick pages: listing failed, no deletions this round: ${error.userMessage}")
+                log.w(TAG, "Scratch notes: listing failed, no deletions this round: ${error.userMessage}")
                 null
             }
         )
         val plan = planQuickPageSync(localPages, rows, remoteNames)
         log.i(
             TAG,
-            "Quick pages: ${localPages.size} local, ${remoteNames?.size ?: "?"} remote file(s), " +
+            "Scratch notes: ${localPages.size} local, ${remoteNames?.size ?: "?"} remote file(s), " +
                 "${plan.upload.size} to upload, ${plan.deleteRemote.size} to delete on server, " +
                 "${plan.deleteLocal.size} removed on server"
         )
@@ -132,7 +132,7 @@ class QuickPageSyncService @Inject constructor(
                 log.e(
                     TAG,
                     "Refusing to delete ${split.refused.size} of ${split.unlockedRowCount} never-sent " +
-                        "quick pages: that looks like a misread listing, not a server-side cleanup."
+                        "scratch notes: that looks like a misread listing, not a server-side cleanup."
                 )
             }
             run {
@@ -145,9 +145,9 @@ class QuickPageSyncService @Inject constructor(
                         deletePage(appRepository, pageId, context.filesDir)
                         appRepository.pageSyncStateRepository.deleteByIds(listOf(pageId))
                         deletedLocal++
-                        log.i(TAG, "Quick page removed on server, deleted locally: $pageId")
+                        log.i(TAG, "Scratch note removed on server, deleted locally: $pageId")
                     } catch (e: Exception) {
-                        errors.add(DomainError.DatabaseError("Failed to delete quick page $pageId: ${e.message}"))
+                        errors.add(DomainError.DatabaseError("Failed to delete scratch note $pageId: ${e.message}"))
                     }
                 }
             }
@@ -160,7 +160,7 @@ class QuickPageSyncService @Inject constructor(
         // A page row that disappeared between planning and upload (deleted while the sync ran) is
         // not an error -- skip it silently rather than failing the whole run with "not found".
         val data = appRepository.pageRepository.getWithDataById(page.id) ?: run {
-            log.i(TAG, "Quick page ${page.id} vanished before upload, skipping")
+            log.i(TAG, "Scratch note ${page.id} vanished before upload, skipping")
             return AppResult.Success(Unit)
         }
         val json = NotebookSerializer.serializePage(page, data.strokes, data.images)
@@ -178,7 +178,7 @@ class QuickPageSyncService @Inject constructor(
                 client.putFile(remote, localFile, mimeType(localFile)).onError { errors.add(it) }
             }
         }
-        log.i(TAG, "Uploaded quick page ${page.id}")
+        log.i(TAG, "Uploaded scratch note ${page.id}")
         return errors.asResult(Unit)
     }
 
@@ -192,7 +192,7 @@ class QuickPageSyncService @Inject constructor(
                 NotebookSerializer.serializePage(data.page, data.strokes, data.images)
             )
         } catch (e: Exception) {
-            log.w(TAG, "Could not back up quick page $pageId before deleting: ${e.message}")
+            log.w(TAG, "Could not back up scratch note $pageId before deleting: ${e.message}")
         }
     }
 
