@@ -24,6 +24,7 @@ import com.ethran.notable.utils.isLatestVersion
 import com.ethran.notable.data.events.AppEventBus
 import com.ethran.notable.data.db.KvProxy
 import com.ethran.notable.sync.NotebookSyncStatusStore
+import com.ethran.notable.sync.SentMarkStore
 import com.ethran.notable.sync.SyncBadge
 import com.ethran.notable.sync.SyncProgressReporter
 import com.ethran.notable.sync.SyncRequest
@@ -53,6 +54,10 @@ data class LibraryUiState(
     val singlePages: List<Page> = emptyList(),
     val syncBadges: Map<String, SyncBadge> = emptyMap(),
     val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
+    /** Quick pages that were sent and are locked. */
+    val lockedPageIds: Set<String> = emptySet(),
+    /** Notebooks that were sent and not changed since. */
+    val sentNotebookIds: Set<String> = emptySet(),
 )
 
 /** What the home screen's sync chip shows; a pure function of engine state, settings and badges. */
@@ -75,6 +80,8 @@ private data class LibraryDatabaseState(
     val singlePages: List<Page> = emptyList(),
     val syncBadges: Map<String, SyncBadge> = emptyMap(),
     val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
+    val lockedPageIds: Set<String> = emptySet(),
+    val sentNotebookIds: Set<String> = emptySet(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -91,6 +98,7 @@ class LibraryViewModel @Inject constructor(
     private val syncStatusStore: NotebookSyncStatusStore,
     private val syncProgressReporter: SyncProgressReporter,
     private val kvProxy: KvProxy,
+    sentMarkStore: SentMarkStore,
     @param:ApplicationContext private val context: Context // Kept strictly for ImportEngine
 ) : ViewModel() {
 
@@ -115,10 +123,19 @@ class LibraryViewModel @Inject constructor(
 
     // 2. Group the database flows (plus per-notebook sync badges) semantically
     private val _dbDataFlow = combine(
-        _foldersFlow, _booksFlow, _singlePagesFlow,
-        syncStatusStore.badges, syncStatusStore.quickPageBadges
-    ) { folders, books, pages, badges, quickBadges ->
-        LibraryDatabaseState(folders, books, pages, badges, quickBadges)
+        combine(
+            _foldersFlow, _booksFlow, _singlePagesFlow,
+            syncStatusStore.badges, syncStatusStore.quickPageBadges
+        ) { folders, books, pages, badges, quickBadges ->
+            LibraryDatabaseState(folders, books, pages, badges, quickBadges)
+        },
+        sentMarkStore.marks,
+    ) { db, marks ->
+        db.copy(
+            lockedPageIds = db.singlePages.filter { marks.isPageLocked(it.id) }.mapTo(HashSet()) { it.id },
+            sentNotebookIds = db.books.filter { marks.isNotebookMarked(it.id, it.updatedAt.time) }
+                .mapTo(HashSet()) { it.id },
+        )
     }
 
     // 3. Expose the final UI State
@@ -135,6 +152,8 @@ class LibraryViewModel @Inject constructor(
             singlePages = dbData.singlePages,
             syncBadges = dbData.syncBadges,
             quickPageBadges = dbData.quickPageBadges,
+            lockedPageIds = dbData.lockedPageIds,
+            sentNotebookIds = dbData.sentNotebookIds,
         )
     }.stateIn(
         scope = viewModelScope,

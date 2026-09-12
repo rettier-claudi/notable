@@ -85,6 +85,7 @@ class NotebookSyncService @Inject constructor(
     private val kvProxy: KvProxy,
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     private val pageDataManager: dagger.Lazy<com.ethran.notable.data.PageDataManager>,
+    private val sentMarkStore: dagger.Lazy<SentMarkStore>,
     @param:ApplicationContext private val context: Context
 ) {
     private val log = SyncLogger
@@ -1170,6 +1171,12 @@ class NotebookSyncService @Inject constructor(
         val departedPageIds =
             (rowsByPageId.keys - notebook.pageIds.toSet()).toList()
         return try {
+            // A "sent" mark survives a server copy replacing the notebook -- that is not a change
+            // made here. Rebased before the write, so the housekeeping that watches the notebook
+            // table never sees the newer timestamp against the old anchor.
+            sentMarkStore.get().rebaseForDownload(
+                notebookId, existingBook?.updatedAt?.time, notebook.updatedAt.time
+            )
             appRepository.bookRepository.updateVerbatim(notebook.copy(openPageId = existingBook?.openPageId))
             // Commit point: mark the notebook synced at the remote
             // timestamp, write the fetched pages' rows, and drop rows for departed pages -- one

@@ -37,6 +37,7 @@ import com.ethran.notable.ui.noRippleClickable
 import com.onyx.android.sdk.extension.isNullOrEmpty
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.FilePlus
+import compose.icons.feathericons.Lock
 import io.shipbook.shipbooksdk.ShipBook
 
 
@@ -51,6 +52,8 @@ fun ShowPagesRow(
     onCreateNewQuickPage: () -> Unit = {},
     onPreviewMissing: (String) -> Unit = {},
     syncBadges: Map<String, SyncBadge> = emptyMap(),
+    /** Quick pages that were sent and are locked: a lock next to the sync badge. */
+    lockedPageIds: Set<String> = emptySet(),
 ) {
 
     if (title != null) {
@@ -112,19 +115,12 @@ fun ShowPagesRow(
                         pageId = pageId,
                         onPreviewMissing = onPreviewMissing
                     )
-                    syncBadges[pageId]?.iconOrNull()?.let { icon ->
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = "Sync status: ${syncBadges[pageId]?.name}",
-                            tint = Color.Black,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .background(Color.White, CircleShape)
-                                .padding(2.dp)
-                                .size(16.dp)
-                        )
-                    }
+                    CornerBadges(
+                        modifier = Modifier.align(Alignment.TopEnd),
+                        sentIcon = if (pageId in lockedPageIds) FeatherIcons.Lock else null,
+                        sentDescription = "Sent, locked",
+                        syncBadge = syncBadges[pageId],
+                    )
                     if (isPageSelected) PageMenu(
                         appRepository = appRepository,
                         pageId = pageId, canDelete = true, onClose = { isPageSelected = false })

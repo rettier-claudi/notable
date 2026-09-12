@@ -307,6 +307,14 @@ class SettingsViewModel @Inject constructor(
             R.string.gestures_three_finger_swipe_right_action,
             settings.twoFingerSwipeRightAction,
         ) { a -> updateSettings(settings.copy(twoFingerSwipeRightAction = a)) },
+        GestureRowModel(
+            R.string.gestures_two_finger_swipe_left_action,
+            settings.swipeLeftTwoFingersAction,
+        ) { a -> updateSettings(settings.copy(swipeLeftTwoFingersAction = a)) },
+        GestureRowModel(
+            R.string.gestures_two_finger_swipe_right_action,
+            settings.swipeRightTwoFingersAction,
+        ) { a -> updateSettings(settings.copy(swipeRightTwoFingersAction = a)) },
     )
 
 
@@ -319,6 +327,8 @@ class SettingsViewModel @Inject constructor(
         AppSettings.GestureAction.ChangeTool to R.string.gesture_action_toggle_pen_eraser,
         AppSettings.GestureAction.ToggleZen to R.string.gesture_action_toggle_zen_mode,
         AppSettings.GestureAction.Select to R.string.gesture_action_select,
+        AppSettings.GestureAction.GoHome to R.string.gesture_action_go_home,
+        AppSettings.GestureAction.Send to R.string.gesture_action_send,
     )
 
 

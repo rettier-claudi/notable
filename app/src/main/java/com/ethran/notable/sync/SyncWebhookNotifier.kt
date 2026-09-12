@@ -3,6 +3,7 @@ package com.ethran.notable.sync
 import android.content.Context
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.ethran.notable.data.AppRepository
 import com.ethran.notable.data.db.KvProxy
 import com.ethran.notable.di.ApplicationScope
 import com.ethran.notable.ui.SnackConf
@@ -11,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.shipbook.shipbooksdk.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,10 +34,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The toolbar's "sync and notify": start a full sync, wait for that WorkManager request to
- * finish, then POST a small JSON to [SyncSettings.syncWebhookUrl] so a server-side consumer can
- * pick the fresh pages up immediately instead of on its own schedule. One at a time; the
- * toolbar button shows [pending] while it runs.
+ * "Send" = the toolbar's "sync and notify" (and the gesture of the same name): run a full sync until
+ * the page's current content is confirmed on the server, then POST a small JSON to
+ * [SyncSettings.syncWebhookUrl] so a server-side consumer can pick the fresh page up immediately
+ * instead of on its own schedule. If both worked, a quick page is locked and a notebook marked as
+ * sent ([SentMarkStore]). One at a time; the toolbar button shows [pending] while it runs.
  */
 @Singleton
 class SyncWebhookNotifier @Inject constructor(
@@ -43,6 +46,8 @@ class SyncWebhookNotifier @Inject constructor(
     private val kvProxy: KvProxy,
     private val syncScheduler: SyncScheduler,
     private val snackDispatcher: SnackDispatcher,
+    private val appRepository: AppRepository,
+    private val sentMarkStore: SentMarkStore,
     @param:ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val _pending = MutableStateFlow(false)
@@ -55,8 +60,12 @@ class SyncWebhookNotifier @Inject constructor(
             .build()
     }
 
-    fun syncThenNotify(pageId: String?, notebookId: String?) {
-        if (!_pending.compareAndSet(expect = false, update = true)) return
+    /**
+     * Starts a send in the background. Returns false (and does nothing) while another send is
+     * still running.
+     */
+    fun syncThenNotify(pageId: String?, notebookId: String?): Boolean {
+        if (!_pending.compareAndSet(expect = false, update = true)) return false
         appScope.launch {
             try {
                 val settings = kvProxy.getSyncSettings()
@@ -65,24 +74,15 @@ class SyncWebhookNotifier @Inject constructor(
                     snack("No webhook URL configured (Settings > Sync)")
                     return@launch
                 }
-                val request = SyncRequest.SyncAll
-                syncScheduler.triggerImmediateSync(request)
-                // KEEP policy: if a sync was already running the new request was dropped, so wait
-                // on the unique work name rather than a request id. Finished = no running/enqueued.
-                val finished = withTimeoutOrNull(SYNC_WAIT_MS) {
-                    WorkManager.getInstance(context)
-                        .getWorkInfosForUniqueWorkFlow(syncScheduler.uniqueNameFor(request))
-                        .first { infos -> infos.all { it.state.isFinished } }
-                }
-                val syncOk = finished?.any { it.state == WorkInfo.State.SUCCEEDED } == true
-                if (finished == null) Log.w(TAG, "Sync did not finish within ${SYNC_WAIT_MS} ms, notifying anyway")
+                val sync = syncUntilOnServer(pageId, notebookId)
+                if (!sync.finished) Log.w(TAG, "Sync did not finish within ${SYNC_WAIT_MS} ms, notifying anyway")
 
                 val body = JSONObject().apply {
                     put("source", "notable")
                     put("event", "sync-and-notify")
                     put("pageId", pageId ?: JSONObject.NULL)
                     put("notebookId", notebookId ?: JSONObject.NULL)
-                    put("syncSucceeded", syncOk)
+                    put("syncSucceeded", sync.contentOnServer)
                     put("time", iso(Date()))
                 }.toString()
                 val result = withContext(Dispatchers.IO) {
@@ -94,8 +94,25 @@ class SyncWebhookNotifier @Inject constructor(
                         ).execute().use { it.code }
                     }
                 }
+                val status = result.getOrNull()
+                val outcome = if (pageId == null) SendOutcome.NOTHING
+                else sendOutcome(isQuickPage = notebookId == null, sync.contentOnServer, status)
+                when (outcome) {
+                    SendOutcome.LOCK_QUICK_PAGE -> sentMarkStore.lockQuickPage(pageId!!)
+                    SendOutcome.MARK_NOTEBOOK -> sync.notebookUpdatedAt?.let {
+                        sentMarkStore.markNotebook(notebookId!!, it)
+                    }
+                    SendOutcome.NOTHING -> {}
+                }
                 result.onSuccess { code ->
-                    if (code in 200..299) snack("Synced and notified") else snack("Webhook answered $code")
+                    snack(
+                        when {
+                            code !in 200..299 -> "Webhook answered $code"
+                            outcome == SendOutcome.LOCK_QUICK_PAGE -> "Sent. Page locked."
+                            outcome == SendOutcome.MARK_NOTEBOOK -> "Sent. Notebook marked."
+                            else -> "Notified, but the sync did not confirm this page on the server"
+                        }
+                    )
                 }.onFailure { e ->
                     Log.w(TAG, "Webhook POST failed: ${e.message}")
                     snack("Webhook failed: ${e.message}")
@@ -106,6 +123,66 @@ class SyncWebhookNotifier @Inject constructor(
             } finally {
                 _pending.value = false
             }
+        }
+        return true
+    }
+
+    private data class SyncOutcome(
+        /** The last sync request finished (did not hit [SYNC_WAIT_MS]). */
+        val finished: Boolean,
+        /** The page's / notebook's current content is confirmed on the server. */
+        val contentOnServer: Boolean,
+        /** Notebook timestamp the confirmation refers to (the anchor of the "sent" mark). */
+        val notebookUpdatedAt: Long?,
+    )
+
+    /**
+     * Full sync, repeated a few times if it did not get the content up: a request folded into a run
+     * that started before the last strokes (KEEP policy), or one that bounced off a sync already
+     * holding the engine's lock ("in progress", e.g. the sync-on-close of the editor that is being
+     * left), finishes "successfully" without this page. A hard failure (auth, network, config) is
+     * not retried here -- another round would fail the same way.
+     */
+    private suspend fun syncUntilOnServer(pageId: String?, notebookId: String?): SyncOutcome {
+        val request = SyncRequest.SyncAll
+        var last = SyncOutcome(finished = false, contentOnServer = false, notebookUpdatedAt = null)
+        repeat(MAX_SYNC_ROUNDS) { round ->
+            syncScheduler.triggerImmediateSyncAndAwait(request)
+            val infos = withTimeoutOrNull(SYNC_WAIT_MS) {
+                WorkManager.getInstance(context)
+                    .getWorkInfosForUniqueWorkFlow(syncScheduler.uniqueNameFor(request))
+                    .first { infos -> infos.all { it.state.isFinished } }
+            } ?: return last.copy(finished = false)
+            val workSucceeded = infos.any {
+                it.state == WorkInfo.State.SUCCEEDED &&
+                    it.outputData.getBoolean(SyncWorker.OUTPUT_KEY_SUCCESS, false)
+            }
+            last = checkOnServer(pageId, notebookId, workSucceeded)
+            if (last.contentOnServer) return last
+            val collided = infos.any {
+                it.outputData.getString(SyncWorker.OUTPUT_KEY_ERROR) ==
+                    com.ethran.notable.utils.DomainError.SyncInProgress.javaClass.simpleName
+            }
+            if (!collided && !workSucceeded) return last
+            Log.i(TAG, "Send: content not on the server after round ${round + 1} (collided=$collided), retrying")
+            delay(RETRY_DELAY_MS)
+        }
+        return last
+    }
+
+    private suspend fun checkOnServer(pageId: String?, notebookId: String?, workSucceeded: Boolean): SyncOutcome {
+        if (pageId == null) return SyncOutcome(true, workSucceeded, null)
+        return if (notebookId == null) {
+            val page = appRepository.pageRepository.getById(pageId)
+            val row = appRepository.pageSyncStateRepository
+                .getByNotebook(QuickPageSyncService.QUICK_PAGES_NOTEBOOK_ID)
+                .firstOrNull { it.pageId == pageId }
+            SyncOutcome(true, quickPageContentOnServer(page?.updatedAt?.time, row), null)
+        } else {
+            val book = appRepository.bookRepository.getById(notebookId)
+            val row = appRepository.notebookSyncStateRepository.get(notebookId)
+            val updatedAt = book?.updatedAt?.time
+            SyncOutcome(true, notebookContentOnServer(updatedAt, row), updatedAt)
         }
     }
 
@@ -119,5 +196,7 @@ class SyncWebhookNotifier @Inject constructor(
     companion object {
         private const val TAG = "SyncWebhookNotifier"
         private const val SYNC_WAIT_MS = 120_000L
+        private const val MAX_SYNC_ROUNDS = 3
+        private const val RETRY_DELAY_MS = 3_000L
     }
 }

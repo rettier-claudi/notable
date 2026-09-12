@@ -4,7 +4,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,6 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ethran.notable.sync.SyncBadge
+import compose.icons.FeatherIcons
+import compose.icons.feathericons.CheckSquare
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -42,6 +46,8 @@ fun NotebookCard(
     pageIds: List<String>,
     openPageId: String?,
     syncBadge: SyncBadge? = null,
+    /** Sent and not changed since: a checked box next to the sync badge. */
+    sent: Boolean = false,
     onOpen: (bookId: String, pageId: String) -> Unit,
     onOpenSettings: (bookId: String) -> Unit,
     onPreviewMissing: (String) -> Unit = {},
@@ -77,19 +83,12 @@ fun NotebookCard(
                 .padding(5.dp),
             color = Color.White
         )
-        syncBadge?.iconOrNull()?.let { icon ->
-            Icon(
-                imageVector = icon,
-                contentDescription = "Sync status: ${syncBadge.name}",
-                tint = Color.Black,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .background(Color.White, CircleShape)
-                    .padding(2.dp)
-                    .size(16.dp)
-            )
-        }
+        CornerBadges(
+            modifier = Modifier.align(Alignment.TopEnd),
+            sentIcon = if (sent) FeatherIcons.CheckSquare else null,
+            sentDescription = "Sent",
+            syncBadge = syncBadge,
+        )
         Text(
             text = title,
             textAlign = TextAlign.Center,
@@ -102,6 +101,45 @@ fun NotebookCard(
                 .background(Color.White)
         )
 
+    }
+}
+
+/**
+ * Top-right corner of a notebook or quick-page card: the "sent" state (checked box for a sent
+ * notebook, lock for a sent quick page) left of the sync badge.
+ */
+@Composable
+internal fun CornerBadges(
+    modifier: Modifier,
+    sentIcon: ImageVector?,
+    sentDescription: String,
+    syncBadge: SyncBadge?,
+) {
+    val syncIcon = syncBadge?.iconOrNull()
+    if (sentIcon == null && syncIcon == null) return
+    Row(modifier = modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        sentIcon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = sentDescription,
+                tint = Color.Black,
+                modifier = Modifier
+                    .background(Color.White, RectangleShape)
+                    .padding(2.dp)
+                    .size(16.dp)
+            )
+        }
+        syncIcon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = "Sync status: ${syncBadge.name}",
+                tint = Color.Black,
+                modifier = Modifier
+                    .background(Color.White, CircleShape)
+                    .padding(2.dp)
+                    .size(16.dp)
+            )
+        }
     }
 }
 

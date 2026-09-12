@@ -41,7 +41,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Job
+import androidx.lifecycle.asFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -108,6 +112,12 @@ data class ToolbarUiState(
     val syncBusy: Boolean = false,
     /** A "sync and notify" is running: sync in flight or webhook POST pending. */
     val syncNotifyPending: Boolean = false,
+
+    // Sent state (see SentMarkStore)
+    /** This quick page was sent: read-only for good. */
+    val isPageLocked: Boolean = false,
+    /** This notebook was sent and not changed since. */
+    val isSentMarked: Boolean = false,
 ) {
     /** The active preset's setting — what the drawing pipeline draws with. The fallback
      * only triggers if the active preset was deleted mid-session. */
@@ -118,6 +128,7 @@ data class ToolbarUiState(
         get() = !isSelectionActive &&
                 !(isMenuOpen || isStrokeSelectionOpen || isBackgroundSelectorModalOpen)
                 && !isQuickNavOpen
+                && !isPageLocked
 }
 
 
@@ -189,6 +200,14 @@ sealed class EditorUiEvent {
 
 private const val RELOAD_AFTER_RESUME_MS = 10_000L
 
+/** Actions that would change the page's content -- refused on a locked (sent) quick page. */
+private fun ToolbarAction.editsContent(): Boolean = when (this) {
+    ToolbarAction.Undo, ToolbarAction.Redo, ToolbarAction.Paste, ToolbarAction.ClearAllStrokes,
+    is ToolbarAction.ImagePicked, is ToolbarAction.BackgroundChanged -> true
+    is ToolbarAction.ToggleBackgroundSelector -> isOpen
+    else -> false
+}
+
 @HiltViewModel
 class EditorViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -200,6 +219,7 @@ class EditorViewModel @Inject constructor(
     private val syncScheduler: com.ethran.notable.sync.SyncScheduler,
     private val syncProgressReporter: com.ethran.notable.sync.SyncProgressReporter,
     private val syncWebhookNotifier: com.ethran.notable.sync.SyncWebhookNotifier,
+    private val sentMarkStore: com.ethran.notable.sync.SentMarkStore,
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     val snackDispatcher: SnackDispatcher,
     private val historyFactory: History.Factory,
@@ -360,7 +380,10 @@ class EditorViewModel @Inject constructor(
         // 4. Sync-on-close. syncFromPageId honors the "Sync when closing notes" setting. Run on the
         //    application scope so it survives this view's teardown. Downloading here is safe: the
         //    editor is closing, so nothing will overwrite a newer remote copy (P18).
+        //    Not while a send is running: it runs a full sync of its own, and a sync-on-close
+        //    holding the engine's lock would only make that one bounce off ("in progress").
         val closingPageId = currentPageId
+        if (syncWebhookNotifier.pending.value) return
         appScope.launch { syncOrchestrator.syncFromPageId(closingPageId) }
     }
 
@@ -372,6 +395,10 @@ class EditorViewModel @Inject constructor(
 
     fun onToolbarAction(action: ToolbarAction) {
         log.v("onToolbarAction: $action")
+        if (_toolbarState.value.isPageLocked && action.editsContent()) {
+            showHint(LOCKED_HINT)
+            return
+        }
         when (action) {
             is ToolbarAction.ToggleToolbar -> {
                 _toolbarState.update { it.copy(isToolbarOpen = !it.isToolbarOpen) }
@@ -434,12 +461,7 @@ class EditorViewModel @Inject constructor(
                 repaintToolbar()
             }
 
-            ToolbarAction.SyncAndNotify -> {
-                syncWebhookNotifier.syncThenNotify(
-                    pageId = _toolbarState.value.pageId, notebookId = bookId
-                )
-                repaintToolbar()
-            }
+            ToolbarAction.SyncAndNotify -> handleSend()
 
             ToolbarAction.CloseAllMenus -> handleCloseAllMenus()
             is ToolbarAction.UpdateQuickNavOpen -> {
@@ -452,6 +474,24 @@ class EditorViewModel @Inject constructor(
     // --------------------------------------------------------
     // Toolbar Action Handlers (private)
     // --------------------------------------------------------
+
+    /**
+     * "Send" (toolbar button or gesture): sync + notify in the background, back to the home screen
+     * right away. Lock / mark follow only once both worked (SyncWebhookNotifier).
+     */
+    private fun handleSend() {
+        val state = _toolbarState.value
+        if (!state.syncEnabled || !state.syncWebhookConfigured) {
+            showHint("Sending needs sync and a notify URL (Settings > Sync)", 3000)
+            return
+        }
+        if (!syncWebhookNotifier.syncThenNotify(pageId = state.pageId, notebookId = bookId)) {
+            showHint("Still sending the previous page", 2000)
+            repaintToolbar()
+            return
+        }
+        sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
+    }
 
     private fun handlePenChange(presetId: String) {
         val preset = GlobalAppSettings.current.toolbarPens.find { it.id == presetId } ?: return
@@ -643,6 +683,11 @@ class EditorViewModel @Inject constructor(
         log.v("loadBookData: bookId=$bookId, pageId=$pageId")
         this.bookId = bookId
         editorActive = true
+        // Before the first suspension: this runs ahead of the first updateDrawingState(), so a
+        // locked quick page never gets the pen enabled, not even for a moment.
+        if (bookId == null && sentMarkStore.isPageLocked(pageId)) {
+            _toolbarState.update { it.copy(isPageLocked = true, isDrawing = false) }
+        }
 
         val page = appRepository.pageRepository.getById(pageId)
 
@@ -683,6 +728,9 @@ class EditorViewModel @Inject constructor(
                 backgroundPageNumber = bgPageNumber
             )
         }
+
+        sentMarkStore.ensureLoaded()
+        observeSentState(bookId, pageId, isQuickPage = page.notebookId == null)
 
         // Check-on-open (P22): hint if the server has a newer version, so the user doesn't
         // unknowingly edit a stale copy and manufacture an avoidable conflict. Best-effort and
@@ -725,6 +773,36 @@ class EditorViewModel @Inject constructor(
                         )
                     )
                 }
+            }
+        }
+    }
+
+    private var sentStateJob: Job? = null
+
+    /**
+     * Mirrors the sent state of what is open into the toolbar state: the lock of a quick page, or
+     * the "sent" mark of a notebook, which holds while the notebook's updatedAt has not moved past
+     * the sent state (the first stroke voids it; SentMarkStore then drops it for good).
+     */
+    private fun observeSentState(bookId: String?, pageId: String, isQuickPage: Boolean) {
+        sentStateJob?.cancel()
+        sentStateJob = viewModelScope.launch {
+            val flow = if (bookId == null) {
+                sentMarkStore.marks.map { (isQuickPage && it.isPageLocked(pageId)) to false }
+            } else {
+                combine(
+                    sentMarkStore.marks,
+                    appRepository.bookRepository.getByIdLive(bookId).asFlow()
+                ) { marks, book -> false to marks.isNotebookMarked(bookId, book?.updatedAt?.time) }
+            }
+            flow.distinctUntilChanged().collect { (locked, marked) ->
+                val before = _toolbarState.value
+                if (before.isPageLocked == locked && before.isSentMarked == marked) return@collect
+                _toolbarState.update { it.copy(isPageLocked = locked, isSentMarked = marked) }
+                if (before.isPageLocked != locked) updateDrawingState()
+                // The badge is Compose drawn over the raw-drawing layer: push the panel so it
+                // actually appears / disappears on e-ink.
+                repaintToolbar()
             }
         }
     }
@@ -872,7 +950,8 @@ class EditorViewModel @Inject constructor(
     }
 
     fun setDrawingStateFromCanvas(isDrawing: Boolean) {
-        _toolbarState.update { it.copy(isDrawing = isDrawing) }
+        // A locked page never enables the pen, whoever asked (gesture cleanup, QuickNav, focus).
+        _toolbarState.update { it.copy(isDrawing = isDrawing && !it.isPageLocked) }
     }
 
     // --------------------------------------------------------
@@ -890,6 +969,8 @@ class EditorViewModel @Inject constructor(
     }
 
     companion object {
+        const val LOCKED_HINT = "This page was sent and is locked."
+
         // Canonical values live in the default pen presets (ToolbarPen.DEFAULT_PENS) —
         // one source of truth. These are fallbacks only; persisted user presets win.
         val DEFAULT_PEN_SETTINGS = ToolbarPen.defaultPenSettings

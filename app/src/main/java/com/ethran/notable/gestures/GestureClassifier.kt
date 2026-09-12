@@ -60,7 +60,10 @@ fun classifyGesture(
         } else {
             val net = tracker.netCentroidTravel()
             horizontalDrag = if (abs(net.x) > abs(net.y)) net.x else 0f
-            swipeThresholdPx = thresholds.multiFingerSwipePx
+            // Two fingers need the full one-finger distance, not the shorter multi-finger one: a
+            // two-finger swipe can be "send", which locks a quick page for good, so a short
+            // two-finger nudge must not fire it.
+            swipeThresholdPx = if (fingers == 2) thresholds.swipePx else thresholds.multiFingerSwipePx
         }
         if (horizontalDrag < -swipeThresholdPx) {
             events += GestureEvent.Swipe(fingers, GestureEvent.Direction.Left)
@@ -130,12 +133,19 @@ fun shouldEnterTransform(
     mode: GestureMode,
     thresholds: GestureThresholds,
     continuousZoom: Boolean,
+    reserveHorizontalSwipe: Boolean = false,
 ): Boolean {
     if (mode != GestureMode.Normal) return false
     if (tracker.maxConcurrentPressed != 2 || tracker.pressedCount() != 2) return false
-    val panning = tracker.centroidTravel() > thresholds.panEnterPx
+    val displacement = tracker.centroidDisplacement()
+    val panning = displacement.getDistance() > thresholds.panEnterPx
     val pinching = continuousZoom && abs(tracker.pinchRatio()) > PINCH_ZOOM_THRESHOLD_CONTINUOUS
-    return panning || pinching
+    if (pinching) return true
+    // Two fingers moving mostly sideways stay in Normal when that movement is the two-finger
+    // swipe (an action is assigned and the page sits at 100 %, where a sideways pan does nothing
+    // useful). Re-evaluated on every event: turning vertical still engages the pan.
+    if (panning && reserveHorizontalSwipe && abs(displacement.x) > abs(displacement.y)) return false
+    return panning
 }
 
 fun shouldEnterScroll(
@@ -147,3 +157,20 @@ fun shouldEnterScroll(
             tracker.maxConcurrentPressed == 1 &&
             abs(tracker.verticalDrag(thresholds.swipeNoiseFloorPx)) > thresholds.smoothScrollEnterPx
 }
+
+/**
+ * Action for a two-finger swipe. The fork's own two-finger settings win when either is assigned;
+ * with both unassigned, the legacy mapping (the three-finger actions) stays, as upstream does for
+ * the rare two-finger swipe that slips past the pan.
+ */
+fun twoFingerSwipeAction(
+    direction: GestureEvent.Direction,
+    settings: com.ethran.notable.data.datastore.AppSettings,
+): com.ethran.notable.data.datastore.AppSettings.GestureAction =
+    if (settings.twoFingerSwipeAssigned) when (direction) {
+        GestureEvent.Direction.Left -> settings.swipeLeftTwoFingersAction
+        GestureEvent.Direction.Right -> settings.swipeRightTwoFingersAction
+    } else when (direction) {
+        GestureEvent.Direction.Left -> settings.twoFingerSwipeLeftAction
+        GestureEvent.Direction.Right -> settings.twoFingerSwipeRightAction
+    }

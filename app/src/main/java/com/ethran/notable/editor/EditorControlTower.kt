@@ -154,7 +154,25 @@ class EditorControlTower(
         history.cleanHistory()
     }
 
+    /** Undo/redo/select/paste would edit a locked (sent) quick page: say so instead. */
+    private fun refusedBecauseLocked(): Boolean {
+        if (!page.isReadOnly) return false
+        showHint(EditorViewModel.LOCKED_HINT)
+        return true
+    }
+
+    override fun goHome() {
+        viewModel.onToolbarAction(ToolbarAction.NavigateToHome)
+    }
+
+    override fun send() {
+        viewModel.onToolbarAction(ToolbarAction.SyncAndNotify)
+    }
+
+    override fun isAtBaseZoom(): Boolean = kotlin.math.abs(page.zoomLevel.value - 1f) < 0.01f
+
     override fun undo() {
+        if (refusedBecauseLocked()) return
         scope.launch {
             logEditorControlTower.i("Undo called")
             history.undo()
@@ -163,6 +181,7 @@ class EditorControlTower(
     }
 
     override fun redo() {
+        if (refusedBecauseLocked()) return
         scope.launch {
             logEditorControlTower.i("Redo called")
             history.redo()
@@ -267,6 +286,7 @@ class EditorControlTower(
 
 
     fun pasteFromClipboard() {
+        if (refusedBecauseLocked()) return
         // finish ongoing movement
         applySelectionDisplace()
 
@@ -316,6 +336,7 @@ class EditorControlTower(
     override fun showHint(text: String) = viewModel.showHint(text)
 
     override fun selectRectangle(rect: Rect) {
+        if (refusedBecauseLocked()) return
         // Take shared ownership of the EPD animation mode now, before the
         // gesture receiver releases its handle: the selection flow runs
         // asynchronously, and the overlap keeps fast refresh on across the

@@ -22,6 +22,7 @@ import com.ethran.notable.editor.ui.EditorSurface
 import com.ethran.notable.editor.ui.HorizontalScrollIndicator
 import com.ethran.notable.editor.ui.ScrollIndicator
 import com.ethran.notable.editor.ui.SelectedBitmap
+import com.ethran.notable.editor.ui.SentBadge
 import com.ethran.notable.editor.ui.toolbar.PositionedToolbar
 import com.ethran.notable.gestures.EditorGestureReceiver
 import com.ethran.notable.navigation.NavigationDestination
@@ -257,6 +258,7 @@ fun EditorView(
                 Spacer(modifier = Modifier.weight(1f))
                 ScrollIndicator(viewModel = viewModel, page = page)
             }
+            SentBadge(viewModel = viewModel)
             PositionedToolbar(
                 viewModel = viewModel, onDrawingStateCheck = { viewModel.updateDrawingState() })
             HorizontalScrollIndicator(viewModel = viewModel, page = page)

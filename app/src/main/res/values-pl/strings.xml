@@ -302,4 +302,10 @@
     <string name="sync_webhook_url_hint">Opcjonalnie. Przycisk „synchronizuj i powiadom” na pasku narzędzi uruchamia synchronizację, a potem wysyła HTTP POST z małym JSON-em na ten adres. Zostaw puste, aby ukryć przycisk.</string>
     <string name="toolbar_element_sync">Stan synchronizacji / synchronizuj teraz</string>
     <string name="toolbar_element_sync_notify">Synchronizuj i powiadom</string>
+    <string name="gestures_two_finger_swipe_left_action">Przeciągnięcie dwoma palcami w lewo (przy normalnym powiększeniu)</string>
+    <string name="gestures_two_finger_swipe_right_action">Przeciągnięcie dwoma palcami w prawo (przy normalnym powiększeniu)</string>
+    <string name="gesture_action_go_home">Powrót do ekranu głównego</string>
+    <string name="gesture_action_send">Wyślij (synchronizuj i powiadom)</string>
+    <string name="sent_badge_locked">Wysłano · zablokowane</string>
+    <string name="sent_badge_marked">Wysłano</string>
 </resources>

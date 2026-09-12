@@ -65,6 +65,11 @@ data class AppSettings(
     // names are kept for persisted-settings compatibility.
     val twoFingerSwipeLeftAction: GestureAction = GestureAction.ToggleZen,
     val twoFingerSwipeRightAction: GestureAction = GestureAction.ToggleZen,
+    // Real two-finger swipes (fork). Only recognized at 100 % zoom, where two fingers moving
+    // sideways cannot pan the page anyway; zoomed in or out, two fingers keep panning. While both
+    // are None, two fingers behave exactly as before.
+    val swipeLeftTwoFingersAction: GestureAction = GestureAction.None,
+    val swipeRightTwoFingersAction: GestureAction = GestureAction.None,
     val holdAction: GestureAction = GestureAction.Select,
     val enableQuickNav: Boolean = true,
     // Onyx only: broadcast onyx.action.INTERCEPT_GESTURE while the app is resumed so
@@ -88,8 +93,19 @@ data class AppSettings(
 
     ) {
     enum class GestureAction {
-        None, Undo, Redo, PreviousPage, NextPage, ChangeTool, ToggleZen, Select
+        None, Undo, Redo, PreviousPage, NextPage, ChangeTool, ToggleZen, Select,
+
+        /** Back to the home screen (library root). */
+        GoHome,
+
+        /** "Sync and notify", the toolbar's send button: sync, notify, lock/mark, home. */
+        Send,
     }
+
+    /** A two-finger swipe has an action, so horizontal two-finger movement is not a pan. */
+    val twoFingerSwipeAssigned: Boolean
+        get() = swipeLeftTwoFingersAction != GestureAction.None ||
+            swipeRightTwoFingersAction != GestureAction.None
 
     enum class Position {
         Top, Bottom, // Left,Right,

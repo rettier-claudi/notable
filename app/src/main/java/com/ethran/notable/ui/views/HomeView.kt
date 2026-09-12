@@ -226,6 +226,7 @@ fun LibraryContent(
                 onCreateNewQuickPage = onCreateNewQuickPage,
                 onPreviewMissing = onPreviewMissing,
                 syncBadges = uiState.quickPageBadges,
+                lockedPageIds = uiState.lockedPageIds,
             )
 
             Spacer(Modifier.height(10.dp))
@@ -237,6 +238,7 @@ fun LibraryContent(
                 books = uiState.books,
                 isImporting = uiState.isImporting,
                 syncBadges = uiState.syncBadges,
+                sentNotebookIds = uiState.sentNotebookIds,
                 onNavigateToEditor = onNavigateToEditor,
                 onDeleteEmptyBook = onDeleteEmptyBook,
                 onCreateNewNotebook = onCreateNewNotebook,
@@ -371,6 +373,7 @@ fun NotebookGrid(
     books: List<Notebook>,
     isImporting: Boolean,
     syncBadges: Map<String, SyncBadge>,
+    sentNotebookIds: Set<String> = emptySet(),
     onNavigateToEditor: (String, String) -> Unit,
     onDeleteEmptyBook: (String) -> Unit,
     onCreateNewNotebook: () -> Unit,
@@ -413,6 +416,7 @@ fun NotebookGrid(
                     pageIds = book.pageIds,
                     openPageId = book.openPageId,
                     syncBadge = syncBadges[book.id],
+                    sent = book.id in sentNotebookIds,
                     // A conflicted notebook opens the resolution dialog on tap — the reachable entry
                     // point for the CONFLICT badge — instead of the editor.
                     onOpen = { bookId, pageId ->

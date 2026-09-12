@@ -144,16 +144,19 @@ class PointerTracker(
      * landed: a pan moves it, a symmetric pinch leaves it ~0. That is what
      * tells panning apart from zooming.
      */
-    fun centroidTravel(): Float {
+    fun centroidTravel(): Float = centroidDisplacement().getDistance()
+
+    /** Direction and length of [centroidTravel]: mean displacement of the pressed pointers. */
+    fun centroidDisplacement(): Offset {
         val pressed = pointers.values.filter { it.pressed }
-        if (pressed.isEmpty()) return 0f
+        if (pressed.isEmpty()) return Offset.Zero
         var dx = 0f
         var dy = 0f
         for (track in pressed) {
             dx += track.currentPosition.x - track.downPosition.x
             dy += track.currentPosition.y - track.downPosition.y
         }
-        return Offset(dx / pressed.size, dy / pressed.size).getDistance()
+        return Offset(dx / pressed.size, dy / pressed.size)
     }
 
     /**

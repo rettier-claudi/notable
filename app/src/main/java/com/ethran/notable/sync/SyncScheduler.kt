@@ -6,6 +6,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.Operation
+import androidx.work.await
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -102,9 +104,20 @@ class SyncScheduler @Inject constructor(
     fun uniqueNameFor(request: SyncRequest): String =
         "${SyncWorker.WORK_NAME}-immediate-${request.typeKey}-${request.identifier}"
 
+    /**
+     * [triggerImmediateSync], but returns only once WorkManager has applied the enqueue. Observing
+     * the unique work name afterwards then sees either this request or the run it was folded into
+     * (KEEP) -- never the previous, already finished run, which would read as "done" at once.
+     */
+    suspend fun triggerImmediateSyncAndAwait(request: SyncRequest = SyncRequest.SyncAll) {
+        enqueueImmediate(request).second.await()
+    }
+
     fun triggerImmediateSync(
         request: SyncRequest = SyncRequest.SyncAll
-    ): UUID {
+    ): UUID = enqueueImmediate(request).first
+
+    private fun enqueueImmediate(request: SyncRequest): Pair<UUID, Operation> {
         val builder = request.toDataBuilder()
             .putString(SyncWorker.KEY_SYNC_TRIGGER, SyncWorker.SYNC_TRIGGER_IMMEDIATE)
 
@@ -117,12 +130,12 @@ class SyncScheduler @Inject constructor(
 
         // KEEP, not REPLACE: a sync already running for this unique name satisfies the request.
         // REPLACE would cancel an in-flight worker mid-sync (e.g. app restarted during a sync).
-        workManager.enqueueUniqueWork(
+        val operation = workManager.enqueueUniqueWork(
             uniqueName,
             ExistingWorkPolicy.KEEP,
             syncWorkRequest
         )
 
-        return syncWorkRequest.id
+        return syncWorkRequest.id to operation
     }
 }

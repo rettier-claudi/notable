@@ -26,4 +26,16 @@ interface GestureActions {
 
     /** Full canvas redraw, used after a two-finger transform gesture settles. */
     fun redrawCanvas()
+
+    /** Leave the editor for the home screen (library root). */
+    fun goHome()
+
+    /** "Sync and notify" -- the same as the toolbar's send button. */
+    fun send()
+
+    /**
+     * The page is at 100 % zoom, where a two-finger pan cannot usefully move it sideways -- so a
+     * horizontal two-finger movement is free to be the two-finger swipe.
+     */
+    fun isAtBaseZoom(): Boolean
 }

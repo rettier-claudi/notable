@@ -227,6 +227,8 @@ class OnyxInputHandler(
     }
     private fun onRawDrawingList(plist: TouchPointList) {
         if (touchHelper == null) return
+        // Raw drawing is off on a locked page; this only catches input that raced the switch.
+        if (page.isReadOnly) return
         val currentLastStrokeEndTime = lastStrokeEndTime
         lastStrokeEndTime = System.currentTimeMillis()
         val startTime = System.currentTimeMillis()
@@ -355,6 +357,7 @@ class OnyxInputHandler(
 
     private fun onRawErasingList(plist: TouchPointList?) {
         isErasing = false
+        if (page.isReadOnly) return
 
         if (plist == null) return
         val points = copyInputToSimplePointF(plist.points, page.scroll, page.zoomLevel.value)

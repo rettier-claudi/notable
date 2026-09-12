@@ -240,7 +240,8 @@ private fun applyModeTransitions(recognizer: Recognizer, ctx: GestureContext) {
             tracker,
             recognizer.mode,
             ctx.thresholds,
-            ctx.appSettings.continuousZoom
+            ctx.appSettings.continuousZoom,
+            reserveHorizontalSwipe = ctx.appSettings.twoFingerSwipeAssigned && ctx.actions.isAtBaseZoom(),
         )
     )
         applyGestureMode(recognizer, GestureMode.Transform, ctx)
@@ -363,10 +364,14 @@ private fun dispatchEvent(event: GestureEvent, ctx: GestureContext) {
                     GestureEvent.Direction.Right -> ctx.appSettings.swipeRightAction
                 }
 
-                // Two fingers are pan/zoom (Transform), so the multi-finger
-                // swipe actions live on three fingers. Two still lands here
-                // on rare churn edge cases (a finger lifting mid-gesture),
-                // where firing the same action is the sensible outcome.
+                // Fork: real two-finger swipes, when assigned (see
+                // shouldEnterTransform's reserveHorizontalSwipe). Unassigned, two
+                // fingers keep upstream's behavior: they are pan/zoom, and a
+                // two-finger swipe only lands here on churn edge cases (a finger
+                // lifting mid-gesture), which fire the three-finger action.
+                2 -> twoFingerSwipeAction(event.direction, ctx.appSettings)
+
+                // Three fingers: the multi-finger swipe actions (legacy field names).
                 else -> when (event.direction) {
                     GestureEvent.Direction.Left -> ctx.appSettings.twoFingerSwipeLeftAction
                     GestureEvent.Direction.Right -> ctx.appSettings.twoFingerSwipeRightAction
@@ -492,6 +497,10 @@ private fun resolveGesture(
             log.i("select")
             ctx.actions.selectRectangle(rectangle)
         }
+
+        AppSettings.GestureAction.GoHome -> ctx.actions.goHome()
+
+        AppSettings.GestureAction.Send -> ctx.actions.send()
     }
 }
 

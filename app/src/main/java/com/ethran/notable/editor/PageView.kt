@@ -325,7 +325,22 @@ class PageView(
     }
 
 
+    /**
+     * The open page is a sent (locked) quick page. Every content mutation below goes through this
+     * one check, so nothing -- pen, eraser, undo, paste, selection, clear -- can write to it, and a
+     * lock can never turn into an edit that would re-upload the page.
+     */
+    val isReadOnly: Boolean
+        get() = pageDataManager.isPageLocked(currentPageId)
+
+    private fun refuseWhenReadOnly(op: String): Boolean {
+        if (!isReadOnly) return false
+        log.w("Refusing $op on locked page $currentPageId")
+        return true
+    }
+
     fun addStrokes(strokesToAdd: List<Stroke>) {
+        if (refuseWhenReadOnly("addStrokes")) return
         strokes += strokesToAdd
         updateHeightForChange(strokesToAdd)
 
@@ -335,6 +350,7 @@ class PageView(
     }
 
     fun applyPageCutOffset(cutLine: List<SimplePointF>, offset: Offset): PageCutMoveResult? {
+        if (refuseWhenReadOnly("pageCut")) return null
         if (offset.x < 0 || offset.y < 0) return null
 
         val (_, previousStrokes) = divideStrokesFromCut(strokes, cutLine)
@@ -364,6 +380,7 @@ class PageView(
 
     // Completely updates strokes
     fun updateStrokes(strokesToUpdate: List<Stroke>) {
+        if (refuseWhenReadOnly("updateStrokes")) return
         // TODO: Clean it up, move some logic to pageDataManager
         val strokeUpdateById = strokesToUpdate.associateBy { it.id }
         strokes = strokes.map { stroke ->
@@ -375,6 +392,7 @@ class PageView(
     }
 
     fun removeStrokes(strokeIds: List<String>) {
+        if (refuseWhenReadOnly("removeStrokes")) return
         strokes = strokes.filter { s -> !strokeIds.contains(s.id) }
         removeStrokesFromPersistLayer(strokeIds)
         pageDataManager.recomputeHeight(currentPageId)
@@ -401,6 +419,7 @@ class PageView(
 
 
     fun addImage(imageToAdd: Image) {
+        if (refuseWhenReadOnly("addImage")) return
         images += listOf(imageToAdd)
         val bottomPlusPadding = imageToAdd.x + imageToAdd.height + 50
         if (bottomPlusPadding > height) height = bottomPlusPadding
@@ -411,6 +430,7 @@ class PageView(
     }
 
     fun addImage(imageToAdd: List<Image>) {
+        if (refuseWhenReadOnly("addImages")) return
         images += imageToAdd
         imageToAdd.forEach {
             val bottomPlusPadding = it.x + it.height + 50
@@ -422,6 +442,7 @@ class PageView(
     }
 
     fun removeImages(imageIds: List<String>) {
+        if (refuseWhenReadOnly("removeImages")) return
         images = images.filter { s -> !imageIds.contains(s.id) }
         removeImagesFromPersistLayer(imageIds)
         pageDataManager.recomputeHeight(currentPageId)
@@ -431,6 +452,7 @@ class PageView(
     // Moves/updates existing images in place (same ids). Mirrors updateStrokes — used for a Move
     // displacement so we never delete-then-reinsert the same id (which raced to a UNIQUE crash).
     fun updateImages(imagesToUpdate: List<Image>) {
+        if (refuseWhenReadOnly("updateImages")) return
         val imageUpdateById = imagesToUpdate.associateBy { it.id }
         images = images.map { image -> imageUpdateById[image.id] ?: image }
         imagesToUpdate.forEach {

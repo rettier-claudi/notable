@@ -57,7 +57,7 @@ class DrawCanvas(
             // still use OpenGL as their only renderer. The original condition is kept
             // (commented) as a reference. See docs/onyx-sdk/onyx-native-eraser-indicator.md.
             // if (!DeviceCompat.isOnyxDevice || inputHandler.isErasing) {
-            if (!DeviceCompat.isOnyxDevice) {
+            if (!DeviceCompat.isOnyxDevice && !page.isReadOnly) {
                 glRenderer.onTouchListener.onTouch(this, event)
             }
 

@@ -104,6 +104,46 @@ the `upstream` remote and merged in as it moves.
   *Settings → Sync → Notify URL*; hidden without a URL). Both are in the default pinned zone and
   placeable via *Settings → Toolbar* for custom layouts. Body:
   `{"source":"notable","event":"sync-and-notify","pageId":…,"notebookId":…,"syncSucceeded":true,"time":"…Z"}`.
+- **Send = sync and notify, then back to the library** (v0.2.6-claudi.6). Pressing `SYNC_NOTIFY`
+  (or the gesture action "Send") returns to the home screen at once; sync and notification run on
+  in the background, the home sync chip shows them, a snack reports the result. The editor's
+  sync-on-close is skipped while a send runs (the send's own full sync covers it, and the two would
+  only collide on the engine's lock). The send repeats the sync up to three times until the page's
+  *current* content is confirmed on the server — a request folded into a run that started before
+  the last strokes, or one that bounced off a sync already in progress, no longer counts as done.
+  - `syncSucceeded` in the body now means exactly that: the page's (quick page) or notebook's
+    current state is confirmed on the server. Before claudi.6 it only meant "the sync job ended
+    without a hard failure", which was also true for a skipped run or one that bounced off
+    another sync. Payload shape and fields are unchanged.
+- **A sent quick page is locked for good** — read-only on the device: pen, eraser, undo/redo,
+  paste, image, background, clear and selection are refused (the pen is switched off, every content
+  write is guarded in `PageView`). There is no way back by editing; *Duplicate* in the page menu
+  gives an editable copy (a new quick page with new stroke ids, uploaded like any other). The
+  page shows *Sent · locked* top right, the library a lock next to the sync badge. Delete still
+  works.
+  - Only a send that got the content confirmed on the server **and** a 2xx from the notify URL
+    locks. Anything else locks nothing and the error stays visible (snack, sync chip).
+  - The lock is device state (`SENT_MARKS` in the app's key-value table, i.e. in
+    `Documents/notabledb`), not part of the page: it does not touch `Page.updatedAt`, the page
+    JSON, or the sync rows. So locking uploads nothing, and the server-side "delete
+    `quickpages/<id>.json` → the device deletes the page" works exactly as before (it asks "edited
+    since the last upload?", which a lock does not change). Opening, closing, the sync button and
+    the sync-on-close do not write to a quick page either; only content edits move its
+    `updatedAt`. The lock of a deleted page is dropped.
+- **A sent notebook is marked, not locked**: *Sent* top right in the editor and a checked box
+  next to the sync badge in the library, until the next local change (stroke, new page, rename …)
+  — then the mark is dropped for good. A server copy replacing the notebook (download) is not a
+  local change and keeps the mark.
+- **Two-finger swipe left / right** as own gestures (*Settings → Gestures*, default none). Only at
+  100 % zoom: two fingers moving mostly sideways are then the swipe instead of a pan (which cannot
+  move the page sideways there anyway); vertical two-finger movement still pans and pinch still
+  zooms; zoomed in or out, two fingers pan as before. Needs the full one-finger swipe distance,
+  since it may be "Send". With both unassigned nothing changes. The existing "three finger swipe"
+  settings stay as they are. (A three-finger swipe whose third finger the panel misses reads as a
+  two-finger swipe — unavoidable.)
+- **Gesture actions "Back to Home Screen" and "Send"** — selectable for every gesture in
+  *Settings → Gestures*. "Send" is exactly the `SYNC_NOTIFY` button, lock/mark included; without
+  sync or a notify URL it only shows a hint.
 - **Sync when leaving the app** (*Settings → Sync*, default on): a full sync on `onStop`, not
   rate-limited, so the last strokes are on the server before the tablet sleeps.
 - **Quick pages never deleted on a guess.** Deleting a local quick page because its file is gone

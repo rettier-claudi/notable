@@ -110,6 +110,7 @@ class PageDataManager @Inject constructor(
     private val appEventBus: AppEventBus,
     private val backgroundFileWatcher: BackgroundFileWatcher,
     private val viewport: PageViewportState,
+    private val sentMarkStore: com.ethran.notable.sync.SentMarkStore,
 ) {
     val log = ShipBook.getLogger("PageDataManager")
     private val dataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -1071,6 +1072,9 @@ class PageDataManager @Inject constructor(
         val notebook = appRepository.bookRepository.getById(notebookId) ?: return
         appRepository.bookRepository.update(notebook)
     }
+
+    /** A sent quick page is read-only: the editor's single guard for content writes asks here. */
+    fun isPageLocked(pageId: String): Boolean = sentMarkStore.isPageLocked(pageId)
 
     fun setScrollInDb() {
         launchDbWrite("scroll") {
