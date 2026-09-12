@@ -42,8 +42,32 @@ data class Notebook(
     // File that its linked to:
     val linkedExternalUri: String? = null,
     val createdAt: Date = Date(),
-    val updatedAt: Date = Date()
+    val updatedAt: Date = Date(),
+
+    /**
+     * What kind of notebook this is, as the server side marks it in the manifest (`"kind"`,
+     * top-level, absent for an ordinary notebook). Stored verbatim — an unknown value is kept and
+     * written back on upload, it just does not mean anything here; only [NOTEBOOK_KIND_SCRATCH]
+     * changes how the notebook is shown (see [isScratch]). Never set by the app itself.
+     */
+    val kind: String? = null,
 )
+
+/** Manifest `kind` for a notebook that the home screen shows among the scratch notes. */
+const val NOTEBOOK_KIND_SCRATCH = "scratch"
+
+/** True for a notebook the server side marked as a scratch note (`"kind": "scratch"`). */
+val Notebook.isScratch: Boolean
+    get() = kind?.trim()?.equals(NOTEBOOK_KIND_SCRATCH, ignoreCase = true) == true
+
+/**
+ * Split a folder's notebooks into the ones shown as tiles in the *Scratch notes* row and the ones
+ * shown in the *Notebooks* grid: `kind == scratch` goes to the row, everything else — an ordinary
+ * notebook, an unknown kind — to the grid. A scratch-kind notebook without pages has nothing to
+ * show as a tile and stays in the grid, where the empty-notebook warning handles it.
+ */
+fun splitScratchNotebooks(books: List<Notebook>): Pair<List<Notebook>, List<Notebook>> =
+    books.partition { it.isScratch && it.pageIds.isNotEmpty() }
 
 // DAO
 @Dao

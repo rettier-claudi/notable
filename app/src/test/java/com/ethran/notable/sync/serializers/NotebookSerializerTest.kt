@@ -1,6 +1,8 @@
 package com.ethran.notable.sync.serializers
 
+import com.ethran.notable.data.db.NOTEBOOK_KIND_SCRATCH
 import com.ethran.notable.data.db.Notebook
+import com.ethran.notable.data.db.isScratch
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.utils.DomainError
 import org.junit.Assert.assertEquals
@@ -133,6 +135,51 @@ class NotebookSerializerTest {
         val result = NotebookSerializer.deserializeManifest(augmented)
         assertTrue("expected Success, got $result", result is AppResult.Success)
         assertEquals(original.id, (result as AppResult.Success).data.id)
+    }
+
+    // ----- "kind": the server side's scratch-note marker -----
+
+    @Test
+    fun manifest_without_kind_deserializes_to_null_kind_and_is_not_scratch() {
+        val json = NotebookSerializer.serializeManifest(sampleNotebook())
+        assertTrue("an ordinary notebook must not write a kind field: $json", !json.contains("\"kind\""))
+
+        val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
+        assertNull(restored.kind)
+        assertTrue(!restored.isScratch)
+    }
+
+    @Test
+    fun manifest_kind_scratch_round_trips_and_marks_scratch() {
+        val original = sampleNotebook().copy(kind = NOTEBOOK_KIND_SCRATCH)
+        val json = NotebookSerializer.serializeManifest(original)
+        assertTrue(json.contains("\"kind\": \"scratch\""))
+
+        val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
+        assertEquals("scratch", restored.kind)
+        assertTrue(restored.isScratch)
+    }
+
+    @Test
+    fun manifest_kind_from_server_is_read_as_top_level_field() {
+        // The agreed interface: a top-level "kind" next to the other manifest fields.
+        val json = NotebookSerializer.serializeManifest(sampleNotebook())
+            .replaceFirst("{", "{\"kind\": \"scratch\",")
+        val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
+        assertTrue(restored.isScratch)
+    }
+
+    @Test
+    fun unknown_kind_is_kept_verbatim_but_ignored() {
+        val json = NotebookSerializer.serializeManifest(sampleNotebook())
+            .replaceFirst("{", "{\"kind\": \"journal\",")
+        val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
+        assertEquals("journal", restored.kind)
+        assertTrue(!restored.isScratch)
+
+        // A re-upload by this device carries the value on unchanged.
+        val reuploaded = NotebookSerializer.serializeManifest(restored)
+        assertTrue(reuploaded.contains("\"kind\": \"journal\""))
     }
 
     @Test

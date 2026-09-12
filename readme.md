@@ -60,6 +60,30 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Scratch-note notebooks: `"kind": "scratch"` in the manifest, no subfolders** (v0.2.6-claudi.9).
+  Every folder view — `Today`, `Yesterday`, a day folder, any folder — has the same two sections
+  as the Workspace: *Scratch notes* on top (a row of tiles), *Notebooks* below (the grid). Which
+  notebooks are tiles in the scratch row is decided by one marker the server side writes:
+  **`kind`, a top-level string field in `manifest.json`, value `scratch`; absent for an ordinary
+  notebook.** The app reads it on download, stores it (`Notebook.kind`, Room 37 → 38), and writes
+  it back **verbatim** on every upload of that manifest — also a value it does not know — so the
+  marker survives this device editing the notebook. Any value other than `scratch`
+  (case-insensitive, trimmed) is kept but means nothing here: such a notebook stays in the grid.
+  `kind` is never set by the app; nothing in the UI creates or changes it. A scratch-kind tile
+  looks like a real scratch note (100 dp preview, tap opens the **first** page), with a notebook's
+  badges — checked box when sent and unchanged since, sync state — and a notebook's long-press
+  settings (rename, delete, export); a conflicted one opens the resolution dialog like a grid
+  card; the page count only shows when there is more than one page. A scratch-kind notebook
+  with no pages stays in the grid, where the empty-notebook warning handles it. In the
+  Workspace the scratch row shows this device's own scratch notes (`quickpages/`) as before, plus
+  any scratch-kind notebook that happens to be in the root (the server side puts none there). The
+  subfolders `Today/Scratch notes` and `Today/Notebooks` are no longer created by the server side;
+  the code that keeps subfolders of `Today` in the sync scope and draws them in the folder bar
+  stays as it is and simply sees none. **What the server side has to know:** write `kind` when it
+  creates the copy; when it rewrites a manifest (move, rename), write the whole manifest back so
+  `kind` is kept; a device still on claudi.8 drops `kind` the first time it re-uploads the
+  manifest (its serializer ignores unknown keys), so the marker is only stable once claudi.9 is
+  installed.
 - **Names on screen: "Scratch notes", "Workspace", "Today"** (v0.2.6-claudi.8). What upstream
   calls *Quick pages* is *Scratch notes* everywhere in the UI (home screen row, settings, sync
   log lines); the root of the library is *Workspace* (was *Ablage*); the always-synced folder is

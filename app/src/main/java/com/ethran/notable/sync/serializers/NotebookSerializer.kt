@@ -59,7 +59,10 @@ object NotebookSerializer {
             linkedExternalUri = notebook.linkedExternalUri,
             createdAt = notebook.createdAt.toInstant().toString(),
             updatedAt = notebook.updatedAt.toInstant().toString(),
-            serverTimestamp = Instant.now().toString()
+            serverTimestamp = Instant.now().toString(),
+            // Written back exactly as stored (also an unknown value), omitted when null: the
+            // server side's marker survives a re-upload by this device.
+            kind = notebook.kind
         )
 
         return json.encodeToString(manifestDto)
@@ -92,7 +95,8 @@ object NotebookSerializer {
                     defaultBackgroundType = manifestDto.defaultBackgroundType,
                     linkedExternalUri = manifestDto.linkedExternalUri,
                     createdAt = createdAt,
-                    updatedAt = updatedAt
+                    updatedAt = updatedAt,
+                    kind = manifestDto.kind
                 )
             )
         } catch (e: SerializationException) {
@@ -344,7 +348,11 @@ object NotebookSerializer {
         val linkedExternalUri: String?,
         val createdAt: String,
         val updatedAt: String,
-        val serverTimestamp: String
+        val serverTimestamp: String,
+        // Set by the server side ("scratch"); absent — not null — for an ordinary notebook. A
+        // default keeps old manifests decodable, and the encoder skips defaults, so null is
+        // never written out.
+        val kind: String? = null
     )
 
     // Scalar page fields only — the streaming serializer emits this, then splices the

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,8 @@ fun ShowPagesRow(
     syncBadges: Map<String, SyncBadge> = emptyMap(),
     /** Quick pages that were sent and are locked: a lock next to the sync badge. */
     lockedPageIds: Set<String> = emptySet(),
+    /** More tiles after the pages, same row (the home screen puts scratch-kind notebooks here). */
+    trailingItems: LazyListScope.() -> Unit = {},
 ) {
 
     if (title != null) {
@@ -127,5 +130,6 @@ fun ShowPagesRow(
                 }
             }
         }
+        trailingItems()
     }
 }

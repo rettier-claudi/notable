@@ -62,7 +62,9 @@ import com.ethran.notable.sync.SyncBadge
 import com.ethran.notable.sync.SyncScheduler
 import com.ethran.notable.ui.LocalSnackContext
 import com.ethran.notable.ui.SnackConf
+import com.ethran.notable.ui.components.CornerBadges
 import com.ethran.notable.ui.components.NotebookCard
+import com.ethran.notable.ui.components.PagePreview
 import com.ethran.notable.ui.components.ShowPagesRow
 import com.ethran.notable.ui.dialogs.ConflictResolutionDialog
 import com.ethran.notable.ui.dialogs.EmptyBookWarningHandler
@@ -75,6 +77,7 @@ import com.ethran.notable.ui.viewmodels.LibraryViewModel
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertTriangle
 import compose.icons.feathericons.Check
+import compose.icons.feathericons.CheckSquare
 import compose.icons.feathericons.FilePlus
 import compose.icons.feathericons.CornerDownRight
 import compose.icons.feathericons.Folder
@@ -239,7 +242,22 @@ fun LibraryContent(
                 onPreviewMissing = onPreviewMissing,
                 syncBadges = uiState.quickPageBadges,
                 lockedPageIds = uiState.lockedPageIds,
-            )
+            ) {
+                // Notebooks the server side marked "kind": "scratch" sit in the same row, as
+                // tiles: tap opens the first page, long-press opens the notebook settings.
+                items(uiState.scratchBooks.reversed(), key = { "book-" + it.id }) { book ->
+                    ScratchBookTile(
+                        appRepository = appRepository,
+                        exportEngine = exportEngine,
+                        syncScheduler = syncScheduler,
+                        book = book,
+                        syncBadge = uiState.syncBadges[book.id],
+                        sent = book.id in uiState.sentNotebookIds,
+                        onNavigateToEditor = onNavigateToEditor,
+                        onPreviewMissing = onPreviewMissing,
+                    )
+                }
+            }
 
             Spacer(Modifier.height(10.dp))
 
@@ -548,6 +566,72 @@ fun NotebookGrid(
                 }
             }
         }
+    }
+}
+
+/**
+ * A scratch-kind notebook ("kind": "scratch" in its manifest, set by the server side) as a tile
+ * in the *Scratch notes* row: the same 100 dp preview as a real scratch note, but with a
+ * notebook's badges (checked box when sent, sync state) and a notebook's long-press settings.
+ * Tapping opens the first page — such a notebook has one page, the count only shows when it has
+ * more. A conflicted one opens the resolution dialog, as in the grid.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ScratchBookTile(
+    appRepository: AppRepository,
+    exportEngine: ExportEngine,
+    syncScheduler: SyncScheduler,
+    book: Notebook,
+    syncBadge: SyncBadge?,
+    sent: Boolean,
+    onNavigateToEditor: (String, String) -> Unit,
+    onPreviewMissing: (String) -> Unit,
+) {
+    var isSettingsOpen by remember { mutableStateOf(false) }
+    var isConflictOpen by remember { mutableStateOf(false) }
+    Box {
+        PagePreview(
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = {
+                        if (syncBadge == SyncBadge.CONFLICT) isConflictOpen = true
+                        else onNavigateToEditor(book.pageIds[0], book.id)
+                    },
+                    onLongClick = { isSettingsOpen = true },
+                )
+                .width(100.dp)
+                .aspectRatio(3f / 4f)
+                .border(1.dp, Color.Black, RectangleShape),
+            pageId = book.pageIds[0],
+            onPreviewMissing = onPreviewMissing
+        )
+        if (book.pageIds.size > 1) Text(
+            text = book.pageIds.size.toString(),
+            modifier = Modifier
+                .background(Color.Black)
+                .padding(5.dp),
+            color = Color.White
+        )
+        CornerBadges(
+            modifier = Modifier.align(Alignment.TopEnd),
+            sentIcon = if (sent) FeatherIcons.CheckSquare else null,
+            sentDescription = "Sent",
+            syncBadge = syncBadge,
+        )
+    }
+    if (isSettingsOpen) {
+        NotebookConfigDialog(
+            appRepository,
+            exportEngine = exportEngine,
+            syncScheduler = syncScheduler,
+            bookId = book.id, onClose = { isSettingsOpen = false })
+    }
+    if (isConflictOpen) {
+        ConflictResolutionDialog(
+            bookId = book.id,
+            title = book.title,
+            onClose = { isConflictOpen = false })
     }
 }
 

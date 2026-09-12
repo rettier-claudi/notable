@@ -12,6 +12,7 @@ import com.ethran.notable.data.datastore.GlobalAppSettings
 import com.ethran.notable.data.db.Folder
 import com.ethran.notable.data.db.Notebook
 import com.ethran.notable.data.db.Page
+import com.ethran.notable.data.db.splitScratchNotebooks
 import com.ethran.notable.data.model.BackgroundType
 import com.ethran.notable.io.ExportEngine
 import com.ethran.notable.io.ImportEngine
@@ -51,7 +52,13 @@ data class LibraryUiState(
     val isImporting: Boolean = false,
     /** The folder bar: root folders in bar order (plus the path to a nested current folder). */
     val folders: List<Folder> = emptyList(),
+    /** Notebooks shown in the *Notebooks* grid: everything the folder holds except [scratchBooks]. */
     val books: List<Notebook> = emptyList(),
+    /**
+     * Notebooks the server side marked `"kind": "scratch"`, shown as tiles in the *Scratch notes*
+     * row next to the folder's real scratch notes ([singlePages]); see [splitScratchNotebooks].
+     */
+    val scratchBooks: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
     val syncBadges: Map<String, SyncBadge> = emptyMap(),
     val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
@@ -143,12 +150,14 @@ class LibraryViewModel @Inject constructor(
     val uiState: StateFlow<LibraryUiState> = combine(
         _folderId, _isLatestVersion, _isImporting, _dbDataFlow
     ) { folderId, isLatestVersion, isImporting, dbData ->
+        val (scratchBooks, books) = splitScratchNotebooks(dbData.books)
         LibraryUiState(
             folderId = folderId,
             isLatestVersion = isLatestVersion,
             isImporting = isImporting,
             folders = dbData.folders,
-            books = dbData.books,
+            books = books,
+            scratchBooks = scratchBooks,
             singlePages = dbData.singlePages,
             syncBadges = dbData.syncBadges,
             quickPageBadges = dbData.quickPageBadges,
