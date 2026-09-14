@@ -149,25 +149,25 @@ class SettingsViewModel @Inject constructor(
 
         if (saveToDb) {
             viewModelScope.launch(Dispatchers.IO) {
-                // Retrieve password
-                val password =
-                    newSettings.password.ifBlank {
-                        kvProxy.getSyncSettings().password
-                    }
-                val settingWithPassword = newSettings.copy(password = password)
-
                 try {
-                    kvProxy.setSyncSettings(settingWithPassword)
+                    if (newSettings.password.isBlank()) {
+                        // Blank field means "(unchanged)": keep the stored password as it is. Going
+                        // through getSyncSettings() and back would save an empty password whenever
+                        // the Keystore fails to decrypt it.
+                        kvProxy.updateSyncSettingsKeepingPassword { newSettings }
+                    } else {
+                        kvProxy.setSyncSettings(newSettings)
+                    }
 
                     // Reconcile schedule only if relevant parameters changed
                     val scheduleChanged =
-                        oldSettings.syncEnabled != settingWithPassword.syncEnabled ||
-                                oldSettings.autoSync != settingWithPassword.autoSync ||
-                                oldSettings.syncInterval != settingWithPassword.syncInterval ||
-                                oldSettings.wifiOnly != settingWithPassword.wifiOnly
+                        oldSettings.syncEnabled != newSettings.syncEnabled ||
+                                oldSettings.autoSync != newSettings.autoSync ||
+                                oldSettings.syncInterval != newSettings.syncInterval ||
+                                oldSettings.wifiOnly != newSettings.wifiOnly
 
                     if (scheduleChanged) {
-                        syncScheduler.reconcilePeriodicSync(settingWithPassword)
+                        syncScheduler.reconcilePeriodicSync(newSettings)
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {

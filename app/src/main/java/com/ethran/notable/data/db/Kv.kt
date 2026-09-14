@@ -176,6 +176,21 @@ class KvProxy @Inject constructor(
         )
     }
 
+    /**
+     * Read-modify-write of the sync settings that leaves the stored password untouched.
+     *
+     * [getSyncSettings] returns an empty password when the Keystore fails to decrypt it, and writing
+     * that result back through [setSyncSettings] would persist the empty password for good. This
+     * works on the stored record instead and writes the encrypted password back as it was.
+     */
+    suspend fun updateSyncSettingsKeepingPassword(transform: (SyncSettings) -> SyncSettings) =
+        withContext(Dispatchers.IO) {
+            val stored = kvRepository.get(SYNC_SETTINGS_KEY)
+                ?.let { json.decodeFromString(SyncSettings.serializer(), it.value) }
+                ?: SyncSettings()
+            setKv(SYNC_SETTINGS_KEY, keepStoredPassword(stored, transform), SyncSettings.serializer())
+        }
+
     // Measured server capabilities. A separate KV entry, not a field on SyncSettings: it is a fact
     // about the server, not a user preference, and callers must check its serverKey before trusting
     // it (a record for a different server is stale). getOrDefault(null) can't express "absent", so
@@ -188,3 +203,12 @@ class KvProxy @Inject constructor(
         setKv(SYNC_SERVER_CAPABILITIES_KEY, value, ServerCapabilities.serializer())
 
 }
+
+/**
+ * Applies [transform] to [stored] without letting it touch the password: [transform] sees an empty
+ * password, and the stored (encrypted) value is put back afterwards.
+ */
+internal fun keepStoredPassword(
+    stored: SyncSettings,
+    transform: (SyncSettings) -> SyncSettings
+): SyncSettings = transform(stored.copy(password = "")).copy(password = stored.password)
