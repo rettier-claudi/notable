@@ -319,4 +319,6 @@
     <string name="gesture_action_send">Send (sync and notify)</string>
     <string name="sent_badge_locked">Sent · locked</string>
     <string name="sent_badge_marked">Sent</string>
+    <string name="gestures_hold_action">Finger Hold Action</string>
+    <string name="home_sync_no_password">Sync paused: no password</string>
 </resources>

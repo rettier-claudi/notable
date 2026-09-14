@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Sync password survives a failed decrypt; a missing password shows; finger hold can be off**
+  (v0.2.6-claudi.10). After every successful full sync, and whenever a sync setting was toggled
+  with the password field blank, the app used to decrypt the stored password and write it back;
+  when the Keystore failed to decrypt, that saved an empty password and every later sync was
+  skipped without a word (seen 2026-09-14: last request 07:16, then silence). Both writes now keep
+  the encrypted password as stored (`KvProxy.updateSyncSettingsKeepingPassword`, sent upstream as
+  Ethran/notable#322). If sync is on and no password is available, the home screen's sync chip
+  says *Sync paused: no password*. *Settings → Gestures → Finger Hold Action* exposes the
+  existing `holdAction` (default *Select*); *None* keeps a resting finger from entering selection
+  mode, which otherwise lets a finger pick up and move the images the bridge puts on a page.
 - **Scratch-note notebooks: `"kind": "scratch"` in the manifest, no subfolders** (v0.2.6-claudi.9).
   Every folder view — `Today`, `Yesterday`, a day folder, any folder — has the same two sections
   as the Workspace: *Scratch notes* on top (a row of tiles), *Notebooks* below (the grid). Which

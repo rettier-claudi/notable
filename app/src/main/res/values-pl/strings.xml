@@ -308,4 +308,6 @@
     <string name="gesture_action_send">Wyślij (synchronizuj i powiadom)</string>
     <string name="sent_badge_locked">Wysłano · zablokowane</string>
     <string name="sent_badge_marked">Wysłano</string>
+    <string name="gestures_hold_action">Przytrzymanie palcem</string>
+    <string name="home_sync_no_password">Synchronizacja wstrzymana: brak hasła</string>
 </resources>

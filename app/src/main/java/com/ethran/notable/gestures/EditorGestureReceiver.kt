@@ -223,7 +223,11 @@ private fun applyModeTransitions(recognizer: Recognizer, ctx: GestureContext) {
         )
         return
     }
-    if (isHoldingOneFinger(tracker, ctx.thresholds)) {
+    // Fork: with the hold action set to None a resting finger doesn't enter selection mode at all
+    // (no cues, no "Selection mode!" hint, no frame-rectangle to drag).
+    if (ctx.appSettings.holdAction != AppSettings.GestureAction.None &&
+        isHoldingOneFinger(tracker, ctx.thresholds)
+    ) {
         applyGestureMode(recognizer, GestureMode.Selection, ctx)
         ctx.actions.setIsDrawing(false) // unfreeze the screen
         ctx.updateSelectionCues(

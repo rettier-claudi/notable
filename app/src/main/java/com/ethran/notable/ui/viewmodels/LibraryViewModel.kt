@@ -71,6 +71,8 @@ data class LibraryUiState(
 /** What the home screen's sync chip shows; a pure function of engine state, settings and badges. */
 data class HomeSyncStatus(
     val enabled: Boolean = false,
+    /** Sync is on but no password is available, so every sync is skipped without a word. */
+    val missingPassword: Boolean = false,
     val state: SyncState = SyncState.Idle,
     val lastSyncTime: Long? = null,
     /** A sync is enqueued or running (WorkManager), even before the engine reports progress. */
@@ -184,16 +186,30 @@ class LibraryViewModel @Inject constructor(
         // A just-finished run may not have been persisted yet: fall back to "now".
         val last = if (state is SyncState.Success) maxOf(stored ?: 0L, System.currentTimeMillis())
         else stored
-        Triple(settings?.syncEnabled == true, state, last)
+        ChipSettings(
+            enabled = settings?.syncEnabled == true,
+            // Blank also when the stored password can't be decrypted: every sync is then skipped.
+            missingPassword = settings?.syncEnabled == true && settings.password.isBlank(),
+            state = state,
+            lastSyncTime = last,
+        )
     }
+
+    private data class ChipSettings(
+        val enabled: Boolean,
+        val missingPassword: Boolean,
+        val state: SyncState,
+        val lastSyncTime: Long?,
+    )
 
     val syncStatus: StateFlow<HomeSyncStatus> = combine(
         _syncSettingsFlow, syncStatusStore.badges, syncScheduler.immediateSyncActive()
-    ) { (enabled, state, last), badges, busy ->
+    ) { chip, badges, busy ->
         HomeSyncStatus(
-            enabled = enabled,
-            state = state,
-            lastSyncTime = last,
+            enabled = chip.enabled,
+            missingPassword = chip.missingPassword,
+            state = chip.state,
+            lastSyncTime = chip.lastSyncTime,
             busy = busy,
             pendingCount = badges.values.count { it == SyncBadge.NOT_SYNCED },
             conflictCount = badges.values.count { it == SyncBadge.CONFLICT || it == SyncBadge.ERROR },

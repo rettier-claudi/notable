@@ -291,6 +291,12 @@ class SettingsViewModel @Inject constructor(
             (R.string.gestures_two_finger_tap_action),
             settings.twoFingerTapAction,
         ) { a -> updateSettings(settings.copy(twoFingerTapAction = a)) },
+        // Fork: the hold gesture always existed (default Select), it just had no row. None stops a
+        // resting finger from starting a selection that then drags the page's images around.
+        GestureRowModel(
+            R.string.gestures_hold_action,
+            settings.holdAction,
+        ) { a -> updateSettings(settings.copy(holdAction = a)) },
         GestureRowModel(
             (R.string.gestures_swipe_left_action),
             settings.swipeLeftAction,
