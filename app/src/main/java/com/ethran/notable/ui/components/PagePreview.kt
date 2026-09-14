@@ -42,11 +42,10 @@ fun PagePreview(
     }
 
     // Get the generator via EntryPoint since this is a stateless Composable
-    val thumbnailGenerator = remember(context) {
-        EntryPoints.get(
-            context.applicationContext, ThumbnailGeneratorEntryPoint::class.java
-        ).thumbnailGenerator()
+    val entryPoint = remember(context) {
+        EntryPoints.get(context.applicationContext, ThumbnailGeneratorEntryPoint::class.java)
     }
+    val thumbnailGenerator = remember(entryPoint) { entryPoint.thumbnailGenerator() }
 
     // Key to force Coil to reload the image when the thumbnail changes
     var refreshTrigger by remember { mutableLongStateOf(0L) }
@@ -62,11 +61,15 @@ fun PagePreview(
         }
     }
 
-    // Check if the file exists initially or when refreshed
-    LaunchedEffect(pageId, refreshTrigger) {
+    // Once per shown preview: a missing thumbnail goes to the caller's backfill (with progress),
+    // an existing one gets a silent re-render if the page was edited after it. Not keyed on
+    // refreshTrigger — a refresh is the result of this request, re-asking would only repeat it.
+    LaunchedEffect(pageId) {
         val exists = withContext(Dispatchers.IO) { imgFile.exists() }
         if (!exists) {
             onPreviewMissing(pageId)
+        } else {
+            entryPoint.thumbnailBackfillQueue().refresh(pageId)
         }
     }
 

@@ -30,12 +30,21 @@ enum class ThumbnailEnsureResult {
 }
 
 
-const val thumbnailGeneratorStaleMs = 60000 // 1 min
+/**
+ * A thumbnail is stale when it is missing or older than the page's last edit. Thumbnails rendered
+ * from the DB carry the render's *start* time as their mtime (see [savePageThumbnail]), so the
+ * strict comparison is enough: an edit that lands during or after a render is always newer.
+ * (Upstream allowed a minute of slack instead, which re-rendered every freshly edited page each
+ * time its preview was shown within that minute.)
+ */
+internal fun isThumbnailStale(thumbModifiedMs: Long?, pageUpdatedAtMs: Long): Boolean =
+    thumbModifiedMs == null || thumbModifiedMs < pageUpdatedAtMs
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface ThumbnailGeneratorEntryPoint {
     fun thumbnailGenerator(): ThumbnailGenerator
+    fun thumbnailBackfillQueue(): ThumbnailBackfillQueue
 }
 
 /**
@@ -113,6 +122,7 @@ class ThumbnailGenerator @Inject constructor(
     private suspend fun generate(
         page: Page, mode: PreviewSaveMode
     ): ThumbnailEnsureResult {
+        val renderStartedAt = System.currentTimeMillis()
         val bitmap = pageContentRenderer.renderPageBitmap(
             pageId = page.id,
             target = RenderTarget.Thumbnail(
@@ -121,7 +131,7 @@ class ThumbnailGenerator @Inject constructor(
             )
         )
         bitmap.useAndRecycle { rendered ->
-            savePageThumbnail(context, rendered, page.id, mode)
+            savePageThumbnail(context, rendered, page.id, mode, modifiedAt = renderStartedAt)
         }
         log.d("Thumbnail generated for pageId=${page.id}")
         return ThumbnailEnsureResult.GENERATED
@@ -129,10 +139,16 @@ class ThumbnailGenerator @Inject constructor(
 
     private suspend fun isThumbnailStale(page: Page): Boolean = withContext(ioDispatcher) {
         val thumbFile = getThumbnailFile(context, page.id)
-        if (!thumbFile.exists()) return@withContext true
+        isThumbnailStale(thumbFile.takeIf { it.exists() }?.lastModified(), page.updatedAt.time)
+    }
 
-        if (page.updatedAt.time + thumbnailGeneratorStaleMs > thumbFile.lastModified()) return@withContext true
-        else return@withContext false
+    /**
+     * Drops a page's thumbnail so the next [ensureThumbnail] renders it again, whatever the
+     * timestamps say. For sync downloads: the page's `updatedAt` is then the *server's* edit time,
+     * which can be older than a thumbnail rendered here from the previous content.
+     */
+    fun invalidate(pageId: String) {
+        getThumbnailFile(context, pageId).delete()
     }
 
 

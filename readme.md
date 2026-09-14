@@ -60,6 +60,22 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Thumbnails follow the page** (v0.2.6-claudi.11). Upstream only ever rendered a thumbnail
+  that was *missing*: once a file existed, the library, the scratch-note tiles and the page
+  overview showed it forever. Leaving the editor never saved one either — the save was started
+  on the editor's own coroutine scope, which is cancelled in the same moment — so only a page
+  change inside a notebook refreshed anything. Now: leaving a page (next/previous page, closing
+  the editor) re-renders its thumbnail from the DB once the page's pending writes have landed
+  (`PageDataManager.refreshThumbnailAfterWrites`, on the manager's own scope); every preview
+  shown asks for a silent re-render when the page was edited after its thumbnail
+  (`ThumbnailBackfillQueue.refresh`, no snackbar — the missing-thumbnail backfill keeps its
+  progress snack); a page replaced by a sync download drops its thumbnail and gets a new one
+  (`ThumbnailGenerator.invalidate`, then `AppEvent.PageDownloaded`), because its `updatedAt`
+  is then the server's edit time and may be older than the old thumbnail. Stale means
+  *thumbnail mtime < page `updatedAt`*; a DB-rendered thumbnail is stamped with the render's
+  start time so an edit during the render still counts as newer (upstream's one-minute slack is
+  gone). The thumbnail is no longer cut from the editor's on-screen bitmap, which was only the
+  visible window of a zoomed or scrolled page.
 - **Sync password survives a failed decrypt; a missing password shows; finger hold can be off**
   (v0.2.6-claudi.10). After every successful full sync, and whenever a sync setting was toggled
   with the password field blank, the app used to decrypt the stored password and write it back;

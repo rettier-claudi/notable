@@ -341,10 +341,16 @@ private fun decodeBitmapFromFile(file: File): Bitmap? {
 }
 
 /**
- * Persist a thumbnail for a page.
+ * Persist a thumbnail for a page. [modifiedAt] (epoch ms) becomes the file's mtime when given: the
+ * staleness check compares it with the page's `updatedAt`, so a thumbnail rendered from the DB is
+ * stamped with the moment the render *started* — an edit landing during the render stays newer.
  */
 fun savePageThumbnail(
-    context: Context, bitmap: Bitmap, pageID: String, mode: PreviewSaveMode = PreviewSaveMode.REGULAR
+    context: Context,
+    bitmap: Bitmap,
+    pageID: String,
+    mode: PreviewSaveMode = PreviewSaveMode.REGULAR,
+    modifiedAt: Long? = null,
 ) {
     ensureNotMainThread("savePageThumbnail")
     val finalFile = getThumbnailFile(context, pageID)
@@ -366,6 +372,7 @@ fun savePageThumbnail(
         }
         if (tempFile.exists() && tempFile.length() > 0) {
             tempFile.renameTo(finalFile)
+            if (modifiedAt != null) finalFile.setLastModified(modifiedAt)
             log.d("savePageThumbnail: thumbnail saved for $pageID")
         } else {
             log.e("savePageThumbnail: temp file missing or empty, aborting rename")

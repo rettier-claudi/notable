@@ -86,6 +86,7 @@ class NotebookSyncService @Inject constructor(
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     private val pageDataManager: dagger.Lazy<com.ethran.notable.data.PageDataManager>,
     private val sentMarkStore: dagger.Lazy<SentMarkStore>,
+    private val thumbnailGenerator: dagger.Lazy<com.ethran.notable.io.ThumbnailGenerator>,
     @param:ApplicationContext private val context: Context
 ) {
     private val log = SyncLogger
@@ -1307,6 +1308,9 @@ class NotebookSyncService @Inject constructor(
             val cache = pageDataManager.get()
             if (cache.getCurrentPageId() != pageId) cache.removePage(pageId)
             if (changed) {
+                // The page's updatedAt is now the server's edit time, which can be older than a
+                // thumbnail rendered here from the previous content: drop it, the event re-renders.
+                thumbnailGenerator.get().invalidate(pageId)
                 SyncLogger.i(TAG, "Page $pageId replaced by download (${strokes.size} strokes, bg=${page.background})")
                 appEventBus.tryEmit(com.ethran.notable.data.events.AppEvent.PageDownloaded(pageId, notebookId))
             }

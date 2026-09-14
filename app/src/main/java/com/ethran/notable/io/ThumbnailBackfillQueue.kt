@@ -19,7 +19,9 @@ import javax.inject.Singleton
 /**
  * A background worker queue for generating page thumbnails.
  *
- * Processes page IDs sequentially and reports progress via global snackbars.
+ * Processes page IDs sequentially. [enqueue] (backfill of missing thumbnails) reports progress via
+ * global snackbars; [refresh] (re-render a thumbnail that may be out of date) is silent, since it
+ * runs every time a page is left or a preview is shown and almost always finds nothing to do.
  * Uses a [Mutex] for thread-safe state management across coroutines.
  */
 @Singleton
@@ -30,10 +32,14 @@ class ThumbnailBackfillQueue @Inject constructor(
     private val appEventBus: AppEventBus
 ) {
     private val log = ShipBook.getLogger("ThumbnailBackfillQueue")
-    private val queue = Channel<Pair<String, PreviewSaveMode>>(Channel.UNLIMITED)
+
+    private class Request(val pageId: String, val mode: PreviewSaveMode, val quiet: Boolean)
+
+    private val queue = Channel<Request>(Channel.UNLIMITED)
 
     private val mutex = Mutex()
     private val queuedPageIds = linkedSetOf<String>()
+    private val queuedRefreshIds = hashSetOf<String>()
 
     private var isCycleActive = false
     private var cycleTotal = 0
@@ -44,8 +50,33 @@ class ThumbnailBackfillQueue @Inject constructor(
     init {
         // listen for thumbnail generation requests
         applicationScope.launch(ioDispatcher) {
-            for ((pageId, mode) in queue) {
-                processOne(pageId, mode)
+            for (request in queue) {
+                if (request.quiet) processRefresh(request.pageId, request.mode)
+                else processOne(request.pageId, request.mode)
+            }
+        }
+        // A download replaced the page's content (NotebookSyncService has already dropped the old
+        // thumbnail file); render the new one so a preview on screen updates.
+        applicationScope.launch {
+            appEventBus.events.collect { event ->
+                if (event is AppEvent.PageDownloaded) refresh(event.pageId)
+            }
+        }
+    }
+
+    /**
+     * Re-renders [pageId]'s thumbnail if it is missing or older than the page's last edit, without
+     * any snackbar. Skipped when the page is already waiting in the queue either way.
+     */
+    fun refresh(pageId: String, mode: PreviewSaveMode = PreviewSaveMode.REGULAR) {
+        if (pageId.isBlank()) return
+        applicationScope.launch(ioDispatcher) {
+            val added = mutex.withLock {
+                pageId !in queuedPageIds && queuedRefreshIds.add(pageId)
+            }
+            if (added && queue.trySend(Request(pageId, mode, quiet = true)).isFailure) {
+                mutex.withLock { queuedRefreshIds.remove(pageId) }
+                log.w("Failed to enqueue thumbnail refresh pageId=$pageId")
             }
         }
     }
@@ -79,7 +110,7 @@ class ThumbnailBackfillQueue @Inject constructor(
             }
 
             added.forEach { pageId ->
-                val sent = queue.trySend(pageId to mode)
+                val sent = queue.trySend(Request(pageId, mode, quiet = false))
                 if (sent.isFailure) {
                     mutex.withLock {
                         queuedPageIds.remove(pageId)
@@ -107,6 +138,16 @@ class ThumbnailBackfillQueue @Inject constructor(
                     updateProgressLocked(throttled = true)
                 }
             }
+        }
+    }
+
+    private suspend fun processRefresh(pageId: String, mode: PreviewSaveMode) {
+        // Leave the set first: an edit made while this render runs must be able to queue another.
+        mutex.withLock { queuedRefreshIds.remove(pageId) }
+        try {
+            thumbnailGenerator.ensureThumbnail(pageId, mode)
+        } catch (t: Throwable) {
+            log.e("Thumbnail refresh failed for pageId=$pageId", t)
         }
     }
 

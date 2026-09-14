@@ -24,7 +24,6 @@ import com.ethran.notable.data.model.BackgroundType.CoverImage
 import com.ethran.notable.data.model.BackgroundType.ImageRepeating
 import com.ethran.notable.editor.canvas.CanvasEventBus
 import com.ethran.notable.editor.utils.saveHQPagePreview
-import com.ethran.notable.editor.utils.savePageThumbnail
 import com.ethran.notable.io.loadBackgroundBitmap
 import com.ethran.notable.utils.chunked
 import com.ethran.notable.utils.logCallStack
@@ -35,6 +34,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.io.File
 import java.lang.ref.SoftReference
@@ -111,6 +112,7 @@ class PageDataManager @Inject constructor(
     private val backgroundFileWatcher: BackgroundFileWatcher,
     private val viewport: PageViewportState,
     private val sentMarkStore: com.ethran.notable.sync.SentMarkStore,
+    private val thumbnailBackfillQueue: dagger.Lazy<com.ethran.notable.io.ThumbnailBackfillQueue>,
 ) {
     val log = ShipBook.getLogger("PageDataManager")
     private val dataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -832,9 +834,11 @@ class PageDataManager @Inject constructor(
                         continue
                     }
 
+                    // The thumbnail is not taken from this bitmap: it is only the visible window
+                    // (a zoomed or scrolled view would become the thumbnail, stamped as fresh). It is
+                    // rendered from the DB instead, see [refreshThumbnailAfterWrites].
                     scope.launch(Dispatchers.IO) {
                         saveHQPagePreview(context, bitmap, pageId, currentScroll, currentZoomLevel)
-                        savePageThumbnail(context, bitmap, pageId)
                     }
                 }
             }
@@ -1217,6 +1221,7 @@ class PageDataManager @Inject constructor(
 
     fun onExit(targetPageId: String, windowedBitmap: Bitmap, scope: CoroutineScope) {
         log.i("Page exit, is page loaded: ${validatePageDataLoaded(targetPageId)}")
+        refreshThumbnailAfterWrites(targetPageId)
         if (validatePageDataLoaded(targetPageId)) {
             cacheBitmap(targetPageId, windowedBitmap)
             scope.launch {
@@ -1224,6 +1229,22 @@ class PageDataManager @Inject constructor(
             }
             recomputeHeight(targetPageId)
             // Size accounting is kept current on every setStrokes/setImages, so no recompute here.
+        }
+    }
+
+    /**
+     * Re-renders the thumbnail of a page being left (next/previous page, or closing the editor),
+     * once the content writes already started for it have landed. Runs on [dataScope], not on the
+     * editor's scope: leaving the editor cancels that scope right after this call, which is why
+     * the thumbnail used to be saved on a page change inside a notebook but never on closing it.
+     * The refresh only renders when the page was edited after its thumbnail.
+     */
+    private fun refreshThumbnailAfterWrites(pageId: String) {
+        // Snapshot before launching, so the waiter does not wait for itself.
+        val pendingWrites = dataScope.coroutineContext.job.children.toList()
+        dataScope.launch {
+            pendingWrites.joinAll()
+            thumbnailBackfillQueue.get().refresh(pageId)
         }
     }
 
