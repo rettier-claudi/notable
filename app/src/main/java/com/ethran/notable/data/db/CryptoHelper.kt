@@ -47,12 +47,25 @@ class CryptoHelper @Inject constructor() {
     /**
      * Decrypts a Base64-encoded string back into plaintext.
      * Returns Success with plaintext, or Error on cryptographic failure.
+     *
+     * Never creates a key: a key made now cannot open a blob sealed with the old one, and on
+     * Android 12+ `KeyStore.containsAlias` answers `false` for *any* Keystore error, not only for a
+     * missing key — so the upstream "ensure the key exists" here turned a passing Keystore hiccup
+     * into a replaced key and a password that could never be read again. A failed attempt is
+     * retried after [DECRYPT_RETRY_PAUSES_MS]; [onRetry] hears about every failed attempt that is
+     * followed by another one (for diagnostics).
      */
-    fun decrypt(encryptedBase64: String): AppResult<String, DomainError> {
+    fun decrypt(
+        encryptedBase64: String,
+        onRetry: (attempt: Int, error: String) -> Unit = { _, _ -> }
+    ): AppResult<String, DomainError> {
         if (encryptedBase64.isBlank()) return AppResult.Success(encryptedBase64)
 
-        return try {
-            ensureKeyExists()
+        return retrying(DECRYPT_RETRY_PAUSES_MS, onRetry = onRetry) { decryptOnce(encryptedBase64) }
+    }
+
+    private fun decryptOnce(encryptedBase64: String): AppResult<String, DomainError> =
+        try {
             val data = Base64.getMimeDecoder().decode(encryptedBase64)
             val secret = getSecretKey() ?: return AppResult.Error(
                 DomainError.UnexpectedState("Decryption key is not available in AndroidKeyStore.")
@@ -69,9 +82,10 @@ class CryptoHelper @Inject constructor() {
             val decryptedBytes = cipher.doFinal(cipherText)
             AppResult.Success(String(decryptedBytes, Charsets.UTF_8))
         } catch (e: Exception) {
-            AppResult.Error(DomainError.UnexpectedState("Decryption failed: ${e.localizedMessage}"))
+            AppResult.Error(
+                DomainError.UnexpectedState("Decryption failed: ${e.javaClass.simpleName}: ${e.localizedMessage}")
+            )
         }
-    }
 
     @Throws(Exception::class)
     private fun ensureKeyExists() {
@@ -102,5 +116,29 @@ class CryptoHelper @Inject constructor() {
         private const val KEY_ALIAS = "com.ethran.notable.sync_key"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
+        /** Pauses before the 2nd and 3rd decrypt attempt. */
+        private val DECRYPT_RETRY_PAUSES_MS = listOf(150L, 600L)
     }
+}
+
+/**
+ * Runs [attempt] until it succeeds, pausing for each entry of [pausesMs] in turn between tries
+ * (so at most `pausesMs.size + 1` tries) and returning the last result. [onRetry] gets the number
+ * and error of each failed try that is followed by another.
+ */
+internal fun <T> retrying(
+    pausesMs: List<Long>,
+    pause: (Long) -> Unit = Thread::sleep,
+    onRetry: (attempt: Int, error: String) -> Unit = { _, _ -> },
+    attempt: () -> AppResult<T, DomainError>
+): AppResult<T, DomainError> {
+    var result = attempt()
+    for ((index, pauseMs) in pausesMs.withIndex()) {
+        if (result !is AppResult.Error) break
+        onRetry(index + 1, result.error.userMessage)
+        pause(pauseMs)
+        result = attempt()
+    }
+    return result
 }

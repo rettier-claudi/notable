@@ -50,4 +50,7 @@ object SyncPaths {
     fun quickPageFile(pageId: String) = "/$ROOT/quickpages/$pageId.json"
     fun quickPagesImagesDir() = "/$ROOT/quickpages/images"
     fun quickPageImageFile(imageName: String) = "/$ROOT/quickpages/images/$imageName"
+
+    /** Device-side diagnostics, written by the app for a human to read; no sync logic reads it. */
+    fun passwordEventsFile() = "/$ROOT/diagnostics/sync-password.log"
 }

@@ -37,6 +37,7 @@ class SyncOrchestrator @Inject constructor(
     private val webDavClientFactory: WebDavClientFactoryPort,
     private val reporter: SyncProgressReporter,
     private val powerGuard: SyncPowerGuard,
+    private val passwordDiagnostics: SyncPasswordDiagnostics,
     @param:ApplicationScope private val appScope: CoroutineScope,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
@@ -275,6 +276,8 @@ class SyncOrchestrator @Inject constructor(
                 kvProxy.updateSyncSettingsKeepingPassword {
                     it.copy(lastSyncTime = System.currentTimeMillis())
                 }
+                // Usually nothing to send; after a password problem this publishes its record.
+                passwordDiagnostics.uploadIfPending(client)
             }
 
         } catch (e: CancellationException) {

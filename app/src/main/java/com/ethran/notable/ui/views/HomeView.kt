@@ -462,7 +462,9 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
     val busy = status.busy || state is SyncState.Syncing
     val (icon: ImageVector, text: String) = when {
         busy -> FeatherIcons.RefreshCw to stringResource(R.string.home_sync_syncing)
-        status.missingPassword -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_no_password)
+        status.missingPassword -> FeatherIcons.AlertTriangle to stringResource(
+            if (status.passwordUnreadable) R.string.home_sync_password_unreadable else R.string.home_sync_no_password
+        )
         state is SyncState.Error -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_failed)
         status.conflictCount > 0 -> FeatherIcons.AlertTriangle to stringResource(R.string.home_sync_conflict)
         status.pendingCount > 0 -> FeatherIcons.RefreshCw to

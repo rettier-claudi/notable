@@ -14,6 +14,7 @@ import com.ethran.notable.data.datastore.GlobalAppSettings
 import com.ethran.notable.sync.SYNC_SERVER_CAPABILITIES_KEY
 import com.ethran.notable.sync.SYNC_SETTINGS_KEY
 import com.ethran.notable.sync.ServerCapabilities
+import com.ethran.notable.sync.SyncPasswordDiagnostics
 import com.ethran.notable.sync.SyncSettings
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.utils.hasFilePermission
@@ -91,7 +92,8 @@ class KvRepository @Inject constructor(
 @Singleton
 class KvProxy @Inject constructor(
     private val kvRepository: KvRepository,
-    private val cryptoHelper: CryptoHelper
+    private val cryptoHelper: CryptoHelper,
+    private val passwordDiagnostics: SyncPasswordDiagnostics
 ) {
     private val log = ShipBook.getLogger("KvProxy")
     private val json = Json {
@@ -145,17 +147,63 @@ class KvProxy @Inject constructor(
 
     // Helper functions that handle sync settings, as it needs to be decrypted and encrypted
 
+    // The decrypted password of this process, keyed by the stored ciphertext it came from. The
+    // settings are read on every touch pause (activity pulse), chip update and sync step; going to
+    // the Keystore once per process instead takes it off that path, so a passing Keystore failure
+    // can no longer blank the password of a running app. A changed password is a new ciphertext
+    // and misses.
+    private val passwordMemo = PasswordMemo()
+
+    /** The last read of the sync settings found a stored password it could not decrypt. */
+    @Volatile
+    var syncPasswordUnreadable: Boolean = false
+        private set
+
+    @Volatile
+    private var lastUnreadableRecordAt = 0L
+
     suspend fun getSyncSettings(): SyncSettings = withContext(Dispatchers.IO) {
         val settings = kvRepository.get(SYNC_SETTINGS_KEY)
             ?.let { json.decodeFromString(SyncSettings.serializer(), it.value) }
             ?: return@withContext SyncSettings()
 
-        if (settings.password.isBlank()) return@withContext settings
+        if (settings.password.isBlank()) {
+            syncPasswordUnreadable = false
+            return@withContext settings
+        }
+        passwordMemo.get(settings.password)?.let {
+            return@withContext settings.copy(password = it)
+        }
 
-        when (val decrypted = cryptoHelper.decrypt(settings.password)) {
-            is AppResult.Success -> settings.copy(password = decrypted.data)
+        val failedAttempts = mutableListOf<String>()
+        val decrypted = cryptoHelper.decrypt(settings.password) { attempt, error ->
+            failedAttempts += "#$attempt $error"
+        }
+        when (decrypted) {
+            is AppResult.Success -> {
+                passwordMemo.put(settings.password, decrypted.data)
+                syncPasswordUnreadable = false
+                if (failedAttempts.isNotEmpty()) {
+                    passwordDiagnostics.record(
+                        "Decrypt succeeded after ${failedAttempts.size} failed attempt(s): " +
+                            failedAttempts.joinToString("; ")
+                    )
+                }
+                settings.copy(password = decrypted.data)
+            }
             is AppResult.Error -> {
                 log.w("Failed to decrypt sync password: ${decrypted.error.userMessage}")
+                // Recorded when it starts and then every few minutes while it lasts, not on every
+                // read: the settings are read on each touch pause.
+                val now = System.currentTimeMillis()
+                if (!syncPasswordUnreadable || now - lastUnreadableRecordAt > UNREADABLE_RECORD_GAP_MS) {
+                    lastUnreadableRecordAt = now
+                    passwordDiagnostics.record(
+                        "Password unreadable, sync skipped: " +
+                            (failedAttempts + "last ${decrypted.error.userMessage}").joinToString("; ")
+                    )
+                }
+                syncPasswordUnreadable = true
                 settings.copy(password = "")
             }
         }
@@ -174,6 +222,8 @@ class KvProxy @Inject constructor(
             value.copy(password = encryptedPassword),
             SyncSettings.serializer()
         )
+        passwordMemo.put(encryptedPassword, value.password)
+        syncPasswordUnreadable = false
     }
 
     /**
@@ -204,6 +254,18 @@ class KvProxy @Inject constructor(
 
 }
 
+/** One decrypted password, valid only for the exact ciphertext it was decrypted from. */
+internal class PasswordMemo {
+    @Volatile
+    private var entry: Pair<String, String>? = null
+
+    fun get(cipherText: String): String? = entry?.takeIf { it.first == cipherText }?.second
+
+    fun put(cipherText: String, plainText: String) {
+        entry = if (cipherText.isBlank()) null else cipherText to plainText
+    }
+}
+
 /**
  * Applies [transform] to [stored] without letting it touch the password: [transform] sees an empty
  * password, and the stored (encrypted) value is put back afterwards.
@@ -212,3 +274,5 @@ internal fun keepStoredPassword(
     stored: SyncSettings,
     transform: (SyncSettings) -> SyncSettings
 ): SyncSettings = transform(stored.copy(password = "")).copy(password = stored.password)
+
+private const val UNREADABLE_RECORD_GAP_MS = 10 * 60_000L

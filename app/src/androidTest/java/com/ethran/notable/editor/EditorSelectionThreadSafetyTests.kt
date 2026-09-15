@@ -22,6 +22,7 @@ import com.ethran.notable.data.db.PageSyncStateRepository
 import com.ethran.notable.data.db.Stroke
 import com.ethran.notable.data.db.StrokePoint
 import com.ethran.notable.data.db.StrokeRepository
+import com.ethran.notable.sync.SyncPasswordDiagnostics
 import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.state.PlacementMode
 import com.ethran.notable.editor.state.SelectionState
@@ -161,7 +162,7 @@ class EditorSelectionThreadSafetyTests {
         val folderRepository = FolderRepository(db.folderDao())
 
         val kvRepository = KvRepository(db.kvDao(), context)
-        val kvProxy = KvProxy(kvRepository, CryptoHelper())
+        val kvProxy = KvProxy(kvRepository, CryptoHelper(), SyncPasswordDiagnostics(kvRepository))
 
         val notebookSyncStateRepository = NotebookSyncStateRepository(db.notebookSyncStateDao())
         val pageSyncStateRepository = PageSyncStateRepository(db.pageSyncStateDao())

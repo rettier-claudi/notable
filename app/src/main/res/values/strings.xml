@@ -321,4 +321,5 @@
     <string name="sent_badge_marked">Sent</string>
     <string name="gestures_hold_action">Finger Hold Action</string>
     <string name="home_sync_no_password">Sync paused: no password</string>
+    <string name="home_sync_password_unreadable">Sync paused: password unreadable</string>
 </resources>

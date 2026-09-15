@@ -73,6 +73,8 @@ data class HomeSyncStatus(
     val enabled: Boolean = false,
     /** Sync is on but no password is available, so every sync is skipped without a word. */
     val missingPassword: Boolean = false,
+    /** ...because the stored password could not be decrypted (a Keystore failure), not because there is none. */
+    val passwordUnreadable: Boolean = false,
     val state: SyncState = SyncState.Idle,
     val lastSyncTime: Long? = null,
     /** A sync is enqueued or running (WorkManager), even before the engine reports progress. */
@@ -190,6 +192,7 @@ class LibraryViewModel @Inject constructor(
             enabled = settings?.syncEnabled == true,
             // Blank also when the stored password can't be decrypted: every sync is then skipped.
             missingPassword = settings?.syncEnabled == true && settings.password.isBlank(),
+            passwordUnreadable = settings != null && kvProxy.syncPasswordUnreadable,
             state = state,
             lastSyncTime = last,
         )
@@ -198,6 +201,7 @@ class LibraryViewModel @Inject constructor(
     private data class ChipSettings(
         val enabled: Boolean,
         val missingPassword: Boolean,
+        val passwordUnreadable: Boolean,
         val state: SyncState,
         val lastSyncTime: Long?,
     )
@@ -208,6 +212,7 @@ class LibraryViewModel @Inject constructor(
         HomeSyncStatus(
             enabled = chip.enabled,
             missingPassword = chip.missingPassword,
+            passwordUnreadable = chip.passwordUnreadable,
             state = chip.state,
             lastSyncTime = chip.lastSyncTime,
             busy = busy,

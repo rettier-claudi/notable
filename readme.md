@@ -60,6 +60,24 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **The sync password is decrypted once per process, never with a fresh key, and failures are
+  recorded** (v0.2.6-claudi.12). On 2026-09-15 the chip said the password was gone while the
+  stored one was fine: the server log shows syncs all morning, and Settings found it again. The
+  app decrypted the password with the Android Keystore on *every* read of the sync settings —
+  each touch pause (activity pulse), each chip update, each sync step — so one passing Keystore
+  failure blanked it for that caller. Now the first successful decrypt is kept in memory for
+  the exact stored ciphertext (`PasswordMemo` in `KvProxy`); later reads don't touch the Keystore.
+  A failed decrypt is retried twice (150 ms, 600 ms). `CryptoHelper.decrypt` no longer "ensures
+  the key exists": on Android 12+ `KeyStore.containsAlias` returns `false` for *any* Keystore
+  error, not just a missing key (AOSP `AndroidKeyStoreSpi.getKeyMetadata`), so a hiccup there
+  generated a new key over the old one and the stored password could never be read again. That
+  is a second possible cause for the loss of 2026-09-14. Keys are only created when a password
+  is encrypted. When the stored password can't be read, the chip says *Sync paused: password
+  unreadable* rather than *no password*. Every failed or retried decrypt goes into a log in the
+  KV table (`SyncPasswordDiagnostics`, key `SYNC_PASSWORD_EVENTS`, last 200 lines, with pid and
+  process uptime, never the password). It also shows in the in-app sync log, and the next
+  successful full sync uploads it to `diagnostics/sync-password.log` on the server (only when
+  there are new lines, so normally no extra request). The bridge doesn't read that directory.
 - **Thumbnails follow the page** (v0.2.6-claudi.11). Upstream only ever rendered a thumbnail
   that was *missing*: once a file existed, the library, the scratch-note tiles and the page
   overview showed it forever. Leaving the editor never saved one either — the save was started

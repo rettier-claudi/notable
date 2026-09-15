@@ -310,4 +310,5 @@
     <string name="sent_badge_marked">Wysłano</string>
     <string name="gestures_hold_action">Przytrzymanie palcem</string>
     <string name="home_sync_no_password">Synchronizacja wstrzymana: brak hasła</string>
+    <string name="home_sync_password_unreadable">Synchronizacja wstrzymana: nie można odczytać hasła</string>
 </resources>
