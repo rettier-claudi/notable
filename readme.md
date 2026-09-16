@@ -60,6 +60,40 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Scribble-to-erase, double tap, sync cancel, pen layer on the home screen, battery**
+  (v0.2.6-claudi.13).
+  - *Scribble to erase* (`ScribbleGeometry.kt`, pure Kotlin with tests). Upstream took any stroke
+    with 15 points, two direction changes and a long enough path as a scribble — "mmm" written
+    under a line qualified and erased the line above along with what was just written — and then
+    erased by bounding-box overlap: i-dots and commas between the zig-zags stayed, and a long
+    line had to be scribbled over for a fifth of its length. Now a scribble must retrace along
+    one axis (path ≥ 3.5 × its extent, ≥ 3 reversals) *and* lie over ink (≥ 40 % of its columns,
+    60 % for vertical zig-zags, which look like handwriting), with a 300 ms pause before it.
+    It erases what lies under the swept area (per 10 px column, top to bottom of the pen's
+    track): strokes with ≥ 40 % of their length inside, strokes with a continuous piece inside
+    at least 60 % of the scribble's width and 1.2 × its height (so a short scribble takes a
+    whole long line), and small marks (≤ 30 px) within one scribble height around it.
+  - *Double tap* counts only in the top-left 2/3 of the editor (width and height), with the
+    second tap within 40 dp of the first and itself a tap (lifts in place). The writing hand
+    rests bottom right.
+  - *Sync*: DNS 5 s, connect 8 s, read/write 20 s of inactivity (upstream: no DNS bound,
+    30/60/60 s). Tapping the sync chip or toolbar button while a sync runs cancels it: the
+    immediate WorkManager runs are dropped (the periodic schedule stays) and every network call
+    of the round in flight is cancelled, including in-process rounds (`SyncCancellation`, an
+    OkHttp event listener; blocking `execute()` ignores coroutine cancellation). No retry follows
+    a cancelled round. Nothing is left half-done: downloads land via `.part` + rename, uploads
+    are single PUTs recorded only after the server answered.
+  - *Pen layer after Send*: the Onyx raw-drawing layer could stay on over the home screen, so
+    the pen drew instead of navigating. `surfaceDestroyed` never called `closeRawDrawing()`
+    (it compared the canvas hash with the input handler's hash), and a delayed "drawing on"
+    could arrive after the editor had closed. Now the canvas closes raw drawing when detached,
+    raw drawing is only enabled on a live surface, and the delayed "on" is dropped once the
+    editor is inactive.
+  - *Battery*: the time-window `chunked` flow operator polled in a tight loop, spinning a core
+    for a second after every page save; it now suspends. The idle ("settle") sync only runs
+    when something was written since the last one, and reads the sync settings at most every
+    10 s instead of on each activity pulse. A preview on screen re-checks its thumbnail at most
+    every 5 minutes per page.
 - **The sync password is decrypted once per process, never with a fresh key, and failures are
   recorded** (v0.2.6-claudi.12). On 2026-09-15 the chip said the password was gone while the
   stored one was fine: the server log shows syncs all morning, and Settings found it again. The
@@ -392,7 +426,7 @@ Notable features intuitive gesture controls within Editor mode to optimize the e
 #### ☝️ 1 Finger
 * **Swipe up or down:** scroll the page.
 * **Swipe left or right:** change to the previous/next page (only available in notebooks).
-* **Double tap:** undo.
+* **Double tap:** undo (fork: top-left 2/3 of the screen, both taps close together).
 * **Hold and drag:** select text and images.
 
 #### ✌️ 2 Fingers

@@ -234,6 +234,11 @@ class LibraryViewModel @Inject constructor(
         syncScheduler.triggerImmediateSync(SyncRequest.SyncAll(folderId = _folderId.value))
     }
 
+    /** Fork: tapping the chip while a sync runs cancels it (e.g. stuck on a dead connection). */
+    fun onCancelSync() {
+        syncScheduler.cancelImmediateSync()
+    }
+
     /**
      * Delete a folder (Room cascades to its notebooks and quick pages, as upstream does) and put a
      * folder tombstone on the server, so the other side drops it instead of restoring it.

@@ -82,6 +82,16 @@ class SyncScheduler @Inject constructor(
         workManager.cancelUniqueWork(SyncWorker.WORK_NAME)
     }
 
+    /**
+     * Fork: the second tap on a sync button while a round runs. Drops the enqueued/running immediate
+     * runs (not the periodic schedule) and cuts the blocking network calls of whatever round is in
+     * flight, WorkManager or in-process ([SyncCancellation]).
+     */
+    fun cancelImmediateSync() {
+        workManager.cancelAllWorkByTag(SyncWorker.SYNC_IMMEDIATE_TAG)
+        SyncCancellation.cancelRunning()
+    }
+
     /** Cancel any sync work currently enqueued or running (explicit user "Cancel sync"). */
     fun cancelRunningSync() {
         workManager.cancelAllWorkByTag(SyncWorker.SYNC_WORK_TAG)
@@ -124,6 +134,7 @@ class SyncScheduler @Inject constructor(
         val syncWorkRequest = OneTimeWorkRequestBuilder<SyncWorker>()
             .setInputData(builder.build())
             .addTag(SyncWorker.SYNC_WORK_TAG)
+            .addTag(SyncWorker.SYNC_IMMEDIATE_TAG)
             .build()
 
         val uniqueName = uniqueNameFor(request)

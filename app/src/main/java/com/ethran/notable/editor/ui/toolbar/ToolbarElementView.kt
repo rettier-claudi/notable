@@ -142,7 +142,7 @@ fun ToolbarElementView(
                 ToolbarButton(
                     // A running sync reads as "pressed" -- the only state e-ink shows cheaply.
                     isSelected = busy,
-                    onSelect = { if (!busy) onAction(ToolbarAction.SyncNow) },
+                    onSelect = { onAction(if (busy) ToolbarAction.CancelSync else ToolbarAction.SyncNow) },
                     vectorIcon = icon,
                     contentDescription = element.contentDescription,
                 )

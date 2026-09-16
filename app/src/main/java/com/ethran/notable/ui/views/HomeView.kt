@@ -143,6 +143,7 @@ fun Library(
         uiState = uiState,
         syncStatus = syncStatus,
         onSyncNow = viewModel::onSyncNow,
+        onCancelSync = viewModel::onCancelSync,
         onNavigateToFolder = { id -> navController.navigate(LibraryDestination.createRoute(id)) },
         onNavigateToSettings = { navController.navigate("settings") },
         onNavigateToEditor = { pageId, bookId ->
@@ -171,6 +172,7 @@ fun LibraryContent(
     uiState: LibraryUiState,
     syncStatus: HomeSyncStatus = HomeSyncStatus(),
     onSyncNow: () -> Unit = {},
+    onCancelSync: () -> Unit = {},
     onNavigateToFolder: (String?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToEditor: (String, String) -> Unit,
@@ -204,7 +206,7 @@ fun LibraryContent(
                     onClick = onCreateNewFolder,
                 )
                 ImportFileButton(onImportPdf = onImportPdf, onImportXopp = onImportXopp)
-                SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow)
+                SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow, onCancelSync = onCancelSync)
                 BadgedBox(
                     badge = {
                         if (!uiState.isLatestVersion) Badge(
@@ -443,10 +445,10 @@ private fun FolderChip(
 /**
  * Sync indicator + button on the home screen: state of the engine, time of the last successful
  * sync, unsynced/conflicted notebook counts. Tapping it starts a sync (or a retry after an error);
- * while a sync runs the tap does nothing. Hidden while sync is disabled.
+ * while a sync runs the tap cancels it. Hidden while sync is disabled.
  */
 @Composable
-fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
+fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit, onCancelSync: () -> Unit = {}) {
     if (!status.enabled) return
     val state = status.state
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -478,7 +480,7 @@ fun SyncStatusChip(status: HomeSyncStatus, onSyncNow: () -> Unit) {
             .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
             .border(0.5.dp, Color.Black)
             .padding(horizontal = 10.dp, vertical = 6.dp)
-            .noRippleClickable(onClick = { if (!busy) onSyncNow() })
+            .noRippleClickable(onClick = { if (busy) onCancelSync() else onSyncNow() })
     ) {
         Icon(
             imageVector = icon,

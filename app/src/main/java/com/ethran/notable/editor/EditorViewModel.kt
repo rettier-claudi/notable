@@ -164,6 +164,7 @@ sealed class ToolbarAction {
     object NavigateToPages : ToolbarAction()
     object NavigateToHome : ToolbarAction()
     object SyncNow : ToolbarAction()
+    object CancelSync : ToolbarAction()
     object SyncAndNotify : ToolbarAction()
 
     object CloseAllMenus : ToolbarAction()
@@ -463,6 +464,12 @@ class EditorViewModel @Inject constructor(
                 repaintToolbar()
             }
 
+            ToolbarAction.CancelSync -> {
+                syncScheduler.cancelImmediateSync()
+                showHint("Sync cancelled", 1500)
+                repaintToolbar()
+            }
+
             ToolbarAction.SyncAndNotify -> handleSend()
 
             ToolbarAction.CloseAllMenus -> handleCloseAllMenus()
@@ -668,8 +675,11 @@ class EditorViewModel @Inject constructor(
         _toolbarState.update { it.copy(isDrawing = shouldBeDrawing) }
         log.d("updateDrawingState: Drawing state: $shouldBeDrawing")
         viewModelScope.launch {
-            if (shouldBeDrawing)
+            if (shouldBeDrawing) {
                 DeviceCompat.delayBeforeResumingDrawing()
+                // Fork: the editor may have closed during the delay (Send → home screen).
+                if (!editorActive) return@launch
+            }
             CanvasEventBus.isDrawing.emit(shouldBeDrawing)
         }
     }

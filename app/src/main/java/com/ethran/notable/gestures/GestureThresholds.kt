@@ -11,6 +11,10 @@ const val TWO_FINGER_TOUCH_TAP_MIN_TIME = 20L
 const val DOUBLE_TAP_TIMEOUT_MS = 170L
 const val DOUBLE_TAP_MIN_MS = 20L
 
+// Fork: double-tap only counts in the top-left [DOUBLE_TAP_ZONE_FRACTION] of the editor (width and
+// height). The writing hand rests bottom right and its taps fired the double-tap action.
+const val DOUBLE_TAP_ZONE_FRACTION = 2f / 3f
+
 // Pinch thresholds are distance *ratios*, also density-independent.
 const val PINCH_ZOOM_THRESHOLD = 0.5f
 const val PINCH_ZOOM_THRESHOLD_CONTINUOUS = 0.25f
@@ -45,6 +49,9 @@ const val GESTURE_REFRESH_SETTLE_MS = 500L
 private val TAP_MOVEMENT_TOLERANCE = 15.dp
 private val TWO_FINGER_TAP_MOVEMENT_TOLERANCE = 20.dp
 
+// Fork: the second tap of a double-tap must land this close to the first.
+private val DOUBLE_TAP_MAX_DISTANCE = 40.dp
+
 // Pointer deltas below this are contact noise (phantom palm touches,
 // re-landed fingers): they neither veto nor contribute to a swipe direction.
 private val SWIPE_NOISE_FLOOR = 10.dp
@@ -76,6 +83,9 @@ class GestureThresholds(density: Density) {
     /** Max total travel (both fingers combined) for a two-finger tap. */
     val twoFingerTapMovementTolerancePx: Float =
         with(density) { TWO_FINGER_TAP_MOVEMENT_TOLERANCE.toPx() }
+
+    /** Max distance between the two taps of a double-tap. */
+    val doubleTapMaxDistancePx: Float = with(density) { DOUBLE_TAP_MAX_DISTANCE.toPx() }
 
     /** Per-pointer delta below which a contact is noise for swipe direction. */
     val swipeNoiseFloorPx: Float = with(density) { SWIPE_NOISE_FLOOR.toPx() }

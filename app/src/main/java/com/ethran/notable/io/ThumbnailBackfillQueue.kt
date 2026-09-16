@@ -41,6 +41,9 @@ class ThumbnailBackfillQueue @Inject constructor(
     private val queuedPageIds = linkedSetOf<String>()
     private val queuedRefreshIds = hashSetOf<String>()
 
+    // Fork: when each page's thumbnail was last checked because its preview was shown.
+    private val shownCheckedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     private var isCycleActive = false
     private var cycleTotal = 0
     private var cycleDone = 0
@@ -79,6 +82,19 @@ class ThumbnailBackfillQueue @Inject constructor(
                 log.w("Failed to enqueue thumbnail refresh pageId=$pageId")
             }
         }
+    }
+
+    /**
+     * [refresh] for a preview coming on screen. Grids recompose and re-show the same previews all the
+     * time (scrolling, folder changes); each check costs a DB read, so a page is checked at most
+     * once per [SHOWN_RECHECK_MS]. Leaving a page and downloads still refresh at once.
+     */
+    fun refreshShown(pageId: String) {
+        val now = System.currentTimeMillis()
+        val last = shownCheckedAt[pageId]
+        if (last != null && now - last < SHOWN_RECHECK_MS) return
+        shownCheckedAt[pageId] = now
+        refresh(pageId)
     }
 
     /**
@@ -176,5 +192,9 @@ class ThumbnailBackfillQueue @Inject constructor(
             delay(100)
             appEventBus.tryEmit(AppEvent.PreviewBackfillCompleted(current = done, total = total))
         }
+    }
+
+    private companion object {
+        const val SHOWN_RECHECK_MS = 5 * 60_000L
     }
 }

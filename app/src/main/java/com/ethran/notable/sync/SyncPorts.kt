@@ -37,14 +37,20 @@ abstract class SyncPortsModule {
 @Module
 @InstallIn(SingletonComponent::class)
 object SyncHttpModule {
-    private const val CONNECT_TIMEOUT_SECONDS = 30L
-    private const val READ_TIMEOUT_SECONDS = 60L
-    private const val WRITE_TIMEOUT_SECONDS = 60L
+    // Fork: short enough that a dead connection fails the round in seconds instead of minutes
+    // (upstream 30/60/60 s, no DNS bound). Read/write are inactivity timeouts, not totals, so large
+    // page uploads and downloads on a slow link are unaffected as long as bytes keep flowing.
+    private const val DNS_TIMEOUT_MS = 5_000L
+    private const val CONNECT_TIMEOUT_SECONDS = 8L
+    private const val READ_TIMEOUT_SECONDS = 20L
+    private const val WRITE_TIMEOUT_SECONDS = 20L
 
     @Provides
     @Singleton
     fun provideSyncOkHttpClient(): OkHttpClient =
         OkHttpClient.Builder()
+            .dns(TimeoutDns(DNS_TIMEOUT_MS))
+            .eventListenerFactory(SyncCancellation.eventListenerFactory)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)

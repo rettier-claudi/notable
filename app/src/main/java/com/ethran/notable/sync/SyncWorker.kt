@@ -100,7 +100,10 @@ class SyncWorker(
 
                         is DomainError.NetworkError -> {
                             Log.e(TAG, "Network error during sync: $failureMessage")
-                            if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                            // Fork: cancelled by the user (SyncCancellation): don't come back with a retry.
+                            if (SyncCancellation.cancelRequested) {
+                                Result.failure(workDataOf(OUTPUT_KEY_SUCCESS to false, OUTPUT_KEY_ERROR to failureMessage))
+                            } else if (runAttemptCount < MAX_RETRY_ATTEMPTS) {
                                 Result.retry()
                             } else {
                                 Result.failure(workDataOf(OUTPUT_KEY_SUCCESS to false, OUTPUT_KEY_ERROR to failureMessage))
@@ -145,6 +148,7 @@ class SyncWorker(
 
     companion object {
         private const val TAG = "SyncWorker"
+        const val SYNC_IMMEDIATE_TAG = "sync-immediate"
         private const val MAX_RETRY_ATTEMPTS = 3
 
         const val KEY_SYNC_TRIGGER = "sync_trigger"

@@ -709,7 +709,12 @@ class WebDAVClient(
      * "timeout" / "Read timed out" and similarly cryptic strings; this names the actual failure and
      * suggests the next step. The technical detail is still logged at the call site above.
      */
-    private fun humanizeNetworkError(errorLabel: String, e: Exception): String = when (e) {
+    private fun humanizeNetworkError(errorLabel: String, e: Exception): String = when {
+        SyncCancellation.cancelRequested -> "Sync cancelled."
+        else -> humanizeException(errorLabel, e)
+    }
+
+    private fun humanizeException(errorLabel: String, e: Exception): String = when (e) {
         // SocketTimeoutException is a subclass of InterruptedIOException, so it is matched first;
         // OkHttp's overall call timeout throws a bare InterruptedIOException("timeout").
         is SocketTimeoutException, is InterruptedIOException ->

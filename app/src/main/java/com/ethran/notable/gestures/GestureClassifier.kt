@@ -1,5 +1,7 @@
 package com.ethran.notable.gestures
 
+import androidx.compose.ui.geometry.Offset
+
 import kotlin.math.abs
 
 /**
@@ -88,6 +90,14 @@ fun isOneFingerTap(tracker: PointerTracker, thresholds: GestureThresholds): Bool
     return tracker.totalTravel() < thresholds.tapMovementTolerancePx &&
             tracker.inputDuration() < ONE_FINGER_TOUCH_TAP_TIME
 }
+
+/** Whether a tap at [position] may start a double-tap: top-left part of a [width]×[height] area. */
+fun isInDoubleTapZone(position: Offset, width: Float, height: Float): Boolean =
+    position.x <= width * DOUBLE_TAP_ZONE_FRACTION && position.y <= height * DOUBLE_TAP_ZONE_FRACTION
+
+/** Whether the second tap landed close enough to the first to form a double-tap. */
+fun isSecondTapNearFirst(first: Offset, second: Offset, thresholds: GestureThresholds): Boolean =
+    (second - first).getDistance() <= thresholds.doubleTapMaxDistancePx
 
 fun isTwoFingerTap(
     tracker: PointerTracker,

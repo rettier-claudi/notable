@@ -39,5 +39,16 @@ object ActivityPulse {
         if (now - previous >= MIN_PULSE_GAP_MS) _pulses.tryEmit(now)
     }
 
+    /** Fork: last content write (stroke/image), as opposed to any touch. */
+    @Volatile
+    var lastWriteAt: Long = 0L
+        private set
+
+    /** A content write: activity, and something the settle sync has to send. */
+    fun contentWritten() {
+        lastWriteAt = System.currentTimeMillis()
+        touch()
+    }
+
     private const val MIN_PULSE_GAP_MS = 1_000L
 }

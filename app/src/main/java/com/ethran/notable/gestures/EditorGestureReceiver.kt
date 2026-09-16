@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
@@ -409,26 +410,50 @@ private fun dispatchEvent(event: GestureEvent, ctx: GestureContext) {
 /**
  * Waits [DOUBLE_TAP_TIMEOUT_MS] for a second tap after a one-finger tap.
  * Returns true if a double-tap was recognized.
+ *
+ * Fork: both taps must be in the top-left double-tap zone, the second one near the first, and the
+ * second contact must itself be a tap (lifts again without moving). A resting palm or a quick
+ * touch at the bottom and then at the top no longer counts.
  */
 private suspend fun AwaitPointerEventScope.awaitDoubleTap(
     tracker: PointerTracker,
     ctx: GestureContext,
 ): Boolean {
-    return withTimeoutOrNull(DOUBLE_TAP_TIMEOUT_MS) {
-        val secondDown = awaitFirstDown()
-        val deltaTime = secondDown.uptimeMillis - tracker.lastInputTimestamp
-        log.v("Second down detected: ${secondDown.type}, position: ${secondDown.position}, deltaTime: $deltaTime")
-        if (deltaTime < DOUBLE_TAP_MIN_MS) {
-            ctx.actions.showHint("Too quick for double click! time between: $deltaTime")
-            return@withTimeoutOrNull null
-        } else {
-            log.v("double click!")
-        }
-        if (secondDown.type != PointerType.Touch) {
-            log.i("Ignoring non-touch input during double-tap detection")
-            return@withTimeoutOrNull null
-        }
-    } != null
+    val first = tracker.lastPosition() ?: return false
+    if (!isInDoubleTapZone(first, size.width.toFloat(), size.height.toFloat())) return false
+    val secondDown = withTimeoutOrNull(DOUBLE_TAP_TIMEOUT_MS) { awaitFirstDown() } ?: return false
+    val deltaTime = secondDown.uptimeMillis - tracker.lastInputTimestamp
+    log.v("Second down detected: ${secondDown.type}, position: ${secondDown.position}, deltaTime: $deltaTime")
+    if (deltaTime < DOUBLE_TAP_MIN_MS) {
+        ctx.actions.showHint("Too quick for double click! time between: $deltaTime")
+        return false
+    }
+    if (secondDown.type != PointerType.Touch) {
+        log.i("Ignoring non-touch input during double-tap detection")
+        return false
+    }
+    if (!isSecondTapNearFirst(first, secondDown.position, ctx.thresholds)) {
+        log.v("Second tap too far from the first, no double click")
+        return false
+    }
+    // The second contact has to lift again, in place, like the first one did.
+    val isTap = withTimeoutOrNull(HOLD_THRESHOLD_MS.toLong()) { awaitTapRelease(secondDown, ctx) } == true
+    if (isTap) log.v("double click!")
+    return isTap
+}
+
+/** Follows [down] until it lifts: true if it stayed in place and no other finger joined. */
+private suspend fun AwaitPointerEventScope.awaitTapRelease(
+    down: PointerInputChange,
+    ctx: GestureContext,
+): Boolean {
+    while (true) {
+        val event = awaitPointerEvent()
+        if (event.changes.any { it.id != down.id && it.pressed }) return false
+        val change = event.changes.firstOrNull { it.id == down.id } ?: continue
+        if ((change.position - down.position).getDistance() > ctx.thresholds.tapMovementTolerancePx) return false
+        if (!change.pressed) return true
+    }
 }
 
 

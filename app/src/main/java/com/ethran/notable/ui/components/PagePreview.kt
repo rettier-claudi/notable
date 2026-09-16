@@ -69,7 +69,7 @@ fun PagePreview(
         if (!exists) {
             onPreviewMissing(pageId)
         } else {
-            entryPoint.thumbnailBackfillQueue().refresh(pageId)
+            entryPoint.thumbnailBackfillQueue().refreshShown(pageId)
         }
     }
 

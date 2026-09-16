@@ -43,6 +43,14 @@ class SyncOrchestrator @Inject constructor(
 ) {
     private val log = SyncLogger
 
+    // Fork: every round starts with a clean cancel flag (see SyncCancellation).
+    private fun tryLockRound(): Boolean = syncMutex.tryLock().also { if (it) SyncCancellation.beginRound() }
+
+    private suspend fun lockRound() {
+        syncMutex.lock()
+        SyncCancellation.beginRound()
+    }
+
     /**
      * Performs a full synchronization round. [scope] says which local notebooks get their manifest
      * checked (see [SyncScope]); folders, tombstones, new remote notebooks, local deletions and
@@ -53,7 +61,7 @@ class SyncOrchestrator @Inject constructor(
 
     /** [syncAllNotebooks] without the wake/Wi-Fi locks ([SyncPowerGuard]) around it. */
     private suspend fun syncAllNotebooksUnguarded(scope: SyncScope): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
-        if (!syncMutex.tryLock()) {
+        if (!tryLockRound()) {
             log.w(TAG, "Sync already in progress, skipping")
             return@withContext AppResult.Error(DomainError.SyncInProgress)
         }
@@ -315,7 +323,7 @@ class SyncOrchestrator @Inject constructor(
             // Actually hold the mutex for the whole operation. A bare isLocked check is
             // check-then-act: it let a sync-on-close race a full/periodic sync. Skip-if-busy
             // is still the right behavior for a single-notebook sync, so a failed tryLock succeeds.
-            if (!syncMutex.tryLock()) return@withContext AppResult.Success(Unit)
+            if (!tryLockRound()) return@withContext AppResult.Success(Unit)
             try {
                 runSingleNotebookSync(notebookId)
             } finally {
@@ -363,7 +371,7 @@ class SyncOrchestrator @Inject constructor(
 
     /** Quick pages only (closing a quick page): skip-if-busy like [syncNotebook]. */
     suspend fun syncQuickPages(): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
-        if (!syncMutex.tryLock()) return@withContext AppResult.Success(Unit)
+        if (!tryLockRound()) return@withContext AppResult.Success(Unit)
         try {
             val settings = kvProxy.getSyncSettings()
             if (!settings.syncEnabled || !settings.syncQuickPages || settings.downloadOnly) {
@@ -496,7 +504,7 @@ class SyncOrchestrator @Inject constructor(
         details: String,
         block: suspend () -> AppResult<Unit, DomainError>
     ): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
-        if (!syncMutex.tryLock()) return@withContext AppResult.Error(DomainError.SyncInProgress)
+        if (!tryLockRound()) return@withContext AppResult.Error(DomainError.SyncInProgress)
         try {
             reporter.beginStep(SyncStep.SYNCING_NOTEBOOKS, PROGRESS_SYNCING_NOTEBOOKS, details)
             block().also { result ->
@@ -549,7 +557,7 @@ class SyncOrchestrator @Inject constructor(
     ): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
         // SKIP mutates nothing and needs no transfer, so it need not wait for the mutex.
         if (resolution == PageConflictResolution.SKIP) return@withContext AppResult.Success(Unit)
-        syncMutex.lock()
+        lockRound()
         try {
             val settings = kvProxy.getSyncSettings()
             val client = resolutionPreflight(settings)
@@ -576,7 +584,7 @@ class SyncOrchestrator @Inject constructor(
         notebookId: String,
         resolution: NotebookConflictResolution
     ): AppResult<Unit, DomainError> = withContext(ioDispatcher) {
-        syncMutex.lock()
+        lockRound()
         try {
             val settings = kvProxy.getSyncSettings()
             val client = resolutionPreflight(settings)

@@ -63,7 +63,9 @@ class OnyxInputHandler(
     val touchHelper by lazy {
         val helper = if (DeviceCompat.isOnyxDevice) {
             try {
-                referencedSurfaceView = this.hashCode().toString()
+                // Fork: the DrawCanvas hash, which surfaceDestroyed compares against. Upstream stored
+                // this handler's hash, so closeRawDrawing() there never ran.
+                referencedSurfaceView = drawCanvas.hashCode().toString()
                 TouchHelper.create(drawCanvas, inputCallback)
             } catch (t: Throwable) {
                 Log.w("OnyxInputHandler", "TouchHelper.create failed: ${t.message}")
@@ -187,6 +189,13 @@ class OnyxInputHandler(
         if(touchHelper == null) return
         log.i("Update is drawing: $toolbarState.isDrawing")
         if (toolbarState.isDrawing) {
+            // Fork: a late "drawing on" (after a gesture or focus change) can arrive once the editor
+            // is already gone, e.g. Send → home screen. Enabling raw drawing then leaves the firmware
+            // pen layer over the home screen: pen strokes draw instead of navigating.
+            if (!isSurfaceLive()) {
+                log.i("Not enabling raw drawing: canvas detached")
+                return
+            }
             touchHelper!!.setRawDrawingEnabled(true)
             // setRawDrawingEnabled(true) resets the framework stroke config to firmware defaults
             // (brush channel on, eraser channel off). Re-assert the eraser channel (styled for the
@@ -205,11 +214,15 @@ class OnyxInputHandler(
         }
     }
 
+    private fun isSurfaceLive(): Boolean =
+        drawCanvas.isAttachedToWindow && drawCanvas.holder.surface.isValid
+
     fun updateActiveSurface() {
         // Takes at least 50ms on Note 4c,
         // and I don't think that we need it immediately
         log.i("Update editable surface")
         coroutineScope.launch {
+            if (!isSurfaceLive()) return@launch
             onSurfaceInit(drawCanvas)
             val toolbarHeight =
                 if (toolbarState.isToolbarOpen) convertDpToPixel(40.dp, drawCanvas.context).toInt() else 0

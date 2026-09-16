@@ -18,8 +18,8 @@ enum class Eraser(val _name: String) {
     PEN("PEN"), SELECT("SELECT"),
 }
 
-const val SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS = 150L
-const val SCRIBBLE_INTERSECTION_THRESHOLD = 0.20f
+// Fork: 300 ms (upstream 150). A short lift between letters must not start a scribble.
+const val SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS = 300L
 
 /**
  * Width (px) of the pen-eraser swath: the diameter of the region [handleErase] actually deletes.
@@ -30,60 +30,6 @@ const val ERASER_SWATH_WIDTH = 30f
 
 const val MINIMUM_SCRIBBLE_POINTS = 15
 
-
-// Calculates total stroke length using Manhattan distance
-private fun calculateStrokeLength(points: List<StrokePoint>): Float {
-    var totalDistance = 0.0f
-    for (i in 1 until points.size) {
-        val dx = points[i].x - points[i - 1].x
-        val dy = points[i].y - points[i - 1].y
-        totalDistance += kotlin.math.abs(dx) + kotlin.math.abs(dy)
-    }
-    return totalDistance
-}
-
-// Counts the number of direction changes (sharp reversals) in a stroke
-private fun calculateNumReversals(
-    points: List<StrokePoint>, stepSize: Int = 10
-): Int {
-    var numReversals = 0
-    for (i in 0 until points.size - 2 * stepSize step stepSize) {
-        val p1 = points[i]
-        val p2 = points[i + stepSize]
-        val p3 = points[i + 2 * stepSize]
-        val segment1 = SimplePointF(p2.x - p1.x, p2.y - p1.y)
-        val segment2 = SimplePointF(p3.x - p2.x, p3.y - p2.y)
-        val dotProduct = segment1.x * segment2.x + segment1.y * segment2.y
-        // Reversal is detected when angle between segments > 90 degrees
-        if (dotProduct < 0) {
-            numReversals++
-        }
-    }
-    return numReversals
-}
-
-
-// Filters strokes that significantly intersect with a given bounding box
-private fun filterStrokesByIntersection(
-    candidateStrokes: List<Stroke>,
-    boundingBox: RectF,
-    threshold: Float = SCRIBBLE_INTERSECTION_THRESHOLD
-): List<Stroke> {
-    return candidateStrokes.filter { stroke ->
-        val strokeRect = strokeBounds(stroke)
-        val intersection = RectF()
-
-        if (intersection.setIntersect(strokeRect, boundingBox)) {
-            val strokeArea = strokeRect.width() * strokeRect.height()
-            val intersectionArea = intersection.width() * intersection.height()
-            val intersectionRatio = if (strokeArea > 0) intersectionArea / strokeArea else 0f
-
-            intersectionRatio >= threshold
-        } else {
-            false
-        }
-    }
-}
 
 // Erases strokes if touchPoints are "scribble", returns true if erased.
 // returns null if not erased, dirty rectangle otherwise
@@ -101,40 +47,18 @@ fun handleScribbleToErase(
     if (!GlobalAppSettings.current.scribbleToEraseEnabled) return null // scribble to erase is disabled
     if (touchPoints.size < MINIMUM_SCRIBBLE_POINTS) return null
     if (firstPointTime < currentLastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS) return null // not enough time has passed since last stroke
-    if (calculateNumReversals(touchPoints) < 2) return null
 
-    val strokeLength = calculateStrokeLength(touchPoints)
-    val boundingBox = calculateBoundingBox(touchPoints) { Pair(it.x, it.y) }
-    val width = boundingBox.width()
-    val height = boundingBox.height()
-    if (width == 0f || height == 0f) return null
-
-    // Require scribble to be long enough relative to bounding box
-    val minLengthForScribble = (width + height) * 3
-    if (strokeLength < minLengthForScribble) {
-        Log.d("ScribbleToErase", "Stroke is too short, $strokeLength < $minLengthForScribble")
+    // Fork: shape + ink underneath decide, and the strokes under the swept area go (see
+    // ScribbleGeometry.kt). Upstream erased by bounding-box overlap, which left i-dots behind, took
+    // the line above along, and needed a long line scribbled over for a fifth of its length.
+    val axis = scribbleAxis(touchPoints) ?: return null
+    val envelope = ScribbleEnvelope.of(touchPoints)
+    val coverage = inkCoverage(envelope, page.strokes)
+    if (coverage < requiredInkCoverage(axis)) {
+        Log.d("ScribbleToErase", "Not over ink: $axis coverage $coverage")
         return null
     }
-
-    // calculate stroke width based on bounding box
-    // bigger swinging in scribble = bigger bounding box => larger stroke size
-    val minDim = kotlin.math.min(boundingBox.width(), boundingBox.height())
-    val maxDim = kotlin.math.max(boundingBox.width(), boundingBox.height())
-    val aspectRatio = if (minDim > 0) maxDim / minDim else 1f
-    val scaleFactor = kotlin.math.min(1f + (aspectRatio - 1f) / 2f, 2f)
-    val strokeSizeForDetection = minDim * 0.15f * scaleFactor
-
-
-    // Get strokes that might intersect with the scribble path
-    val path = pointsToPath(touchPoints.map { SimplePointF(it.x, it.y) })
-    val outPath = Path()
-    Paint().apply { this.strokeWidth = strokeSizeForDetection }.getFillPath(path, outPath)
-    val candidateStrokes = selectStrokesFromPath(page.strokes, outPath)
-
-
-    // Filter intersecting strokes based on intersection ratio
-    val expandedBoundingBox = boundingBox.expandBy(strokeSizeForDetection / 2)
-    val deletedStrokes = filterStrokesByIntersection(candidateStrokes, expandedBoundingBox)
+    val deletedStrokes = selectScribbledStrokes(envelope, page.strokes)
 
     // If strokes were found, remove them and update history
     if (deletedStrokes.isNotEmpty()) {

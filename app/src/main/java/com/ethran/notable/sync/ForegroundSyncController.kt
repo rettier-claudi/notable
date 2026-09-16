@@ -135,12 +135,21 @@ class ForegroundSyncController @Inject constructor(
         // Entering the foreground counts as activity, so a long pause before the *next* touch does
         // not immediately re-trigger the return sync that onAppResumed already covered.
         var lastActivityAt = System.currentTimeMillis()
+        // Fork: the settle sync only sends writes. Browsing, opening books and page turns without
+        // writing no longer start a round two minutes later; resume/return syncs still pull.
+        var settledWritesUpTo = ActivityPulse.lastWriteAt
+        // Fork: settings are read at most every SETTINGS_CACHE_MS, not on every pulse.
+        var cachedSettings: SyncSettings? = null
+        var settingsReadAt = 0L
 
         ActivityPulse.pulses.collect { at ->
             val quietFor = at - lastActivityAt
             lastActivityAt = at
-            val settings = try {
-                kvProxy.getSyncSettings()
+            val settings = cachedSettings?.takeIf { at - settingsReadAt < SETTINGS_CACHE_MS } ?: try {
+                kvProxy.getSyncSettings().also {
+                    cachedSettings = it
+                    settingsReadAt = at
+                }
             } catch (e: Exception) {
                 return@collect
             }
@@ -156,7 +165,9 @@ class ForegroundSyncController @Inject constructor(
             if (settleAfter > 0) {
                 settleJob = launch {
                     delay(settleAfter * 60_000L)
-                    requestSync("idle for $settleAfter min")
+                    val writtenAt = ActivityPulse.lastWriteAt
+                    if (writtenAt <= settledWritesUpTo) return@launch
+                    if (requestSync("idle for $settleAfter min")) settledWritesUpTo = writtenAt
                 }
             }
         }
@@ -165,5 +176,6 @@ class ForegroundSyncController @Inject constructor(
     companion object {
         private const val TAG = "ForegroundSync"
         const val MIN_GAP_MS = 30_000L
+        private const val SETTINGS_CACHE_MS = 10_000L
     }
 }

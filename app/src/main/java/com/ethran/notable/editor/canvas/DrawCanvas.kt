@@ -99,6 +99,16 @@ class DrawCanvas(
 
     fun registerObservers() = observers.registerAll()
 
+    // Fork: hand the pen back to the system when the editor leaves the screen, whatever order the
+    // surface callbacks and pending "drawing on" events arrive in (see OnyxInputHandler.updateIsDrawing).
+    override fun onDetachedFromWindow() {
+        inputHandler.touchHelper?.let {
+            it.setRawDrawingEnabled(false)
+            it.closeRawDrawing()
+        }
+        super.onDetachedFromWindow()
+    }
+
     fun init() {
         log.i("Initializing Canvas")
         glRenderer = OpenGLRenderer(this@DrawCanvas)
