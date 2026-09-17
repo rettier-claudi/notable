@@ -19,8 +19,8 @@ import kotlin.math.min
  *  2. Which strokes does it erase? ([selectScribbledStrokes]) Everything under the area the
  *     scribble swept ([ScribbleEnvelope]), measured on the stroke's own polyline: a big enough
  *     share of it, a long enough continuous piece of it (so a long line goes when only part of it
- *     is scribbled over), or small marks (i-dots, commas) lying in or just around the area — how
- *     far around grows with the scribble's size on each axis.
+ *     is scribbled over), or small marks (i-dots) in the area or above/below it. Sideways the
+ *     area ends sharply where the pen turned: nothing beside the scribble goes.
  *
  * All distances are page pixels (≈ screen pixels at zoom 1; the Note Air 5C has ~12 px per mm).
  */
@@ -53,9 +53,6 @@ const val SCRIBBLE_ERASE_MIN_RUN_PX = 30f
 
 /** Strokes whose own extent is at most this are "small marks": i-dots, commas, periods. */
 const val SCRIBBLE_SMALL_MARK_PX = 30f
-
-/** Small marks count this far beside the scribble, as a share of its width (clamped to 4–45 px): about a pen width for one letter. */
-const val SCRIBBLE_SMALL_MARK_MARGIN_X_SHARE = 0.2f
 
 private const val SAMPLE_STEP_PX = 3f
 
@@ -246,14 +243,13 @@ fun requiredInkCoverage(axis: ScribbleAxis): Float = when (axis) {
 fun selectScribbledStrokes(envelope: ScribbleEnvelope, strokes: List<Stroke>): List<Stroke> {
     val height = envelope.typicalHeight
     val minRun = maxOf(SCRIBBLE_ERASE_MIN_RUN_PX, (envelope.right - envelope.left) * 0.6f, height * 1.2f)
-    // Each axis grows with the scribble's size on that axis. i-dots sit up to about one x-height
-    // above the letters the scribble covers; sideways a comma or a slanted dot is only a little
-    // off. A scribble over the last letter is narrow, so the letters next to it (as small as an
-    // i-dot in small handwriting) stay.
+    // i-dots sit up to about one x-height above the letters the scribble covers, so small marks
+    // count that far up and down. Sideways the area stops at the pen's turning points (plus half a
+    // pen width): letters next to a scribbled-out last letter are as small as an i-dot in small
+    // handwriting, and a comma after a scribbled word is only gone if the scribble covers it.
     val edgeTolerance = 4f
     val smallMarkMarginY = height.coerceIn(10f, 45f)
-    val smallMarkMarginX = ((envelope.right - envelope.left) * SCRIBBLE_SMALL_MARK_MARGIN_X_SHARE)
-        .coerceIn(edgeTolerance, 45f)
+    val smallMarkMarginX = edgeTolerance
     return strokes.filter { stroke ->
         if (!overlapsVertically(stroke, envelope, smallMarkMarginX, smallMarkMarginY)) return@filter false
         if (pointExtent(stroke) <= SCRIBBLE_SMALL_MARK_PX) {

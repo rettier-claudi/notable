@@ -72,9 +72,10 @@ the `upstream` remote and merged in as it moves.
     It erases what lies under the swept area (per 10 px column, top to bottom of the pen's
     track): strokes with ≥ 40 % of their length inside, strokes with a continuous piece inside
     at least 60 % of the scribble's width and 1.2 × its height (so a short scribble takes a
-    whole long line), and small marks (≤ 30 px) within one scribble height above/below it and
-    a fifth of its width beside it (4–45 px, claudi.14). Sideways used to be a full scribble
-    height too, so scribbling out the last letter took the small letters next to it.
+    whole long line), and small marks (≤ 30 px) within one scribble height above/below it.
+    Sideways the area ends at the pen's turning points (+4 px, claudi.15): it used to reach a
+    full scribble height sideways too, so scribbling out the last letter took the small letters
+    next to it. A comma after a word only goes if the scribble runs over it.
   - *Double tap* counts only in the top-left 2/3 of the editor (width and height), with the
     second tap within 40 dp of the first and itself a tap (lifts in place). The writing hand
     rests bottom right.

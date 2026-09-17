@@ -94,15 +94,31 @@ class ScribbleGeometryTest {
     // --- What does it erase? ------------------------------------------------------------------
 
     @Test
-    fun `i-dot and comma next to the scribbled word go too`() {
+    fun `i-dot above the scribbled word goes, a comma beside it stays`() {
         val word = stroke(mmm(100f, 140f, 4))
         val iDot = stroke(polyline(160f, 88f, 161f, 89f)) // ~17 px above the x-height
         val comma = stroke(polyline(225f, 138f, 222f, 152f)) // after the word, below baseline
-        val scribble = horizontalScribble(95f, 220f, 108f, 138f)
+        val scribble = horizontalScribble(95f, 215f, 108f, 138f)
         val erased = selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, iDot, comma))
         assertTrue(word in erased)
         assertTrue("i-dot", iDot in erased)
-        assertTrue("comma", comma in erased)
+        assertFalse("comma", comma in erased)
+    }
+
+    @Test
+    fun `comma the scribble runs over goes`() {
+        val word = stroke(mmm(100f, 140f, 4))
+        val comma = stroke(polyline(225f, 138f, 222f, 152f))
+        val scribble = horizontalScribble(95f, 230f, 108f, 140f)
+        assertTrue(comma in selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, comma)))
+    }
+
+    @Test
+    fun `dot just past the end of the scribble stays`() {
+        val word = stroke(mmm(100f, 140f, 4))
+        val dot = stroke(polyline(232f, 90f, 233f, 91f)) // above, but 12 px right of the scribble
+        val scribble = horizontalScribble(95f, 220f, 108f, 138f)
+        assertFalse(dot in selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, dot)))
     }
 
     @Test
