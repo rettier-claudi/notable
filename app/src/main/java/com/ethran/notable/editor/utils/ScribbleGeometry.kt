@@ -19,7 +19,8 @@ import kotlin.math.min
  *  2. Which strokes does it erase? ([selectScribbledStrokes]) Everything under the area the
  *     scribble swept ([ScribbleEnvelope]), measured on the stroke's own polyline: a big enough
  *     share of it, a long enough continuous piece of it (so a long line goes when only part of it
- *     is scribbled over), or small marks (i-dots, commas) lying in or just around the area.
+ *     is scribbled over), or small marks (i-dots, commas) lying in or just around the area — how
+ *     far around grows with the scribble's size on each axis.
  *
  * All distances are page pixels (≈ screen pixels at zoom 1; the Note Air 5C has ~12 px per mm).
  */
@@ -52,6 +53,9 @@ const val SCRIBBLE_ERASE_MIN_RUN_PX = 30f
 
 /** Strokes whose own extent is at most this are "small marks": i-dots, commas, periods. */
 const val SCRIBBLE_SMALL_MARK_PX = 30f
+
+/** Small marks count this far beside the scribble, as a share of its width (clamped to 4–45 px): about a pen width for one letter. */
+const val SCRIBBLE_SMALL_MARK_MARGIN_X_SHARE = 0.2f
 
 private const val SAMPLE_STEP_PX = 3f
 
@@ -144,9 +148,10 @@ class ScribbleEnvelope private constructor(
     private val originX: Float,
     private val top: FloatArray,
     private val bottom: FloatArray,
+    /** Where the pen actually went; the columns round outwards by up to a column width. */
+    val left: Float,
+    val right: Float,
 ) {
-    val left: Float get() = originX
-    val right: Float get() = originX + top.size * SCRIBBLE_BIN_PX
     val minY: Float = top.filter { !it.isNaN() }.minOrNull() ?: 0f
     val maxY: Float = bottom.filter { !it.isNaN() }.maxOrNull() ?: 0f
 
@@ -160,13 +165,14 @@ class ScribbleEnvelope private constructor(
 
     private fun column(x: Float): Int = floor((x - originX) / SCRIBBLE_BIN_PX).toInt()
 
-    /** Whether (x, y) lies in the swept area grown by [margin] in every direction. */
-    fun contains(x: Float, y: Float, margin: Float = 0f): Boolean {
-        val from = max(column(x - margin), 0)
-        val to = min(column(x + margin), top.size - 1)
+    /** Whether (x, y) lies in the swept area grown by [marginX] sideways and [marginY] up and down. */
+    fun contains(x: Float, y: Float, marginX: Float = 0f, marginY: Float = marginX): Boolean {
+        if (x < left - marginX || x > right + marginX) return false
+        val from = max(column(x - marginX), 0)
+        val to = min(column(x + marginX), top.size - 1)
         for (c in from..to) {
             if (top[c].isNaN()) continue
-            if (y >= top[c] - margin && y <= bottom[c] + margin) return true
+            if (y >= top[c] - marginY && y <= bottom[c] + marginY) return true
         }
         return false
     }
@@ -188,7 +194,7 @@ class ScribbleEnvelope private constructor(
                 if (top[c].isNaN() || p.y < top[c]) top[c] = p.y
                 if (bottom[c].isNaN() || p.y > bottom[c]) bottom[c] = p.y
             }
-            return ScribbleEnvelope(originX, top, bottom)
+            return ScribbleEnvelope(originX, top, bottom, samples.minOf { it.x }, samples.maxOf { it.x })
         }
 
         private fun column(x: Float, originX: Float) = floor((x - originX) / SCRIBBLE_BIN_PX).toInt()
@@ -203,9 +209,10 @@ private fun pointExtent(stroke: Stroke): Float {
     return max(w, h)
 }
 
-private fun overlapsVertically(stroke: Stroke, envelope: ScribbleEnvelope, margin: Float) =
-    stroke.right >= envelope.left - margin && stroke.left <= envelope.right + margin &&
-            stroke.bottom >= envelope.minY - margin && stroke.top <= envelope.maxY + margin
+private fun overlapsVertically(
+    stroke: Stroke, envelope: ScribbleEnvelope, marginX: Float, marginY: Float = marginX,
+) = stroke.right >= envelope.left - marginX && stroke.left <= envelope.right + marginX &&
+        stroke.bottom >= envelope.minY - marginY && stroke.top <= envelope.maxY + marginY
 
 /**
  * Share of the envelope's columns that already hold ink from [strokes] within their span. Near 0
@@ -239,13 +246,18 @@ fun requiredInkCoverage(axis: ScribbleAxis): Float = when (axis) {
 fun selectScribbledStrokes(envelope: ScribbleEnvelope, strokes: List<Stroke>): List<Stroke> {
     val height = envelope.typicalHeight
     val minRun = maxOf(SCRIBBLE_ERASE_MIN_RUN_PX, (envelope.right - envelope.left) * 0.6f, height * 1.2f)
-    // i-dots sit up to about one x-height above the letters the scribble covers.
-    val smallMarkMargin = height.coerceIn(10f, 45f)
+    // Each axis grows with the scribble's size on that axis. i-dots sit up to about one x-height
+    // above the letters the scribble covers; sideways a comma or a slanted dot is only a little
+    // off. A scribble over the last letter is narrow, so the letters next to it (as small as an
+    // i-dot in small handwriting) stay.
     val edgeTolerance = 4f
+    val smallMarkMarginY = height.coerceIn(10f, 45f)
+    val smallMarkMarginX = ((envelope.right - envelope.left) * SCRIBBLE_SMALL_MARK_MARGIN_X_SHARE)
+        .coerceIn(edgeTolerance, 45f)
     return strokes.filter { stroke ->
-        if (!overlapsVertically(stroke, envelope, smallMarkMargin)) return@filter false
+        if (!overlapsVertically(stroke, envelope, smallMarkMarginX, smallMarkMarginY)) return@filter false
         if (pointExtent(stroke) <= SCRIBBLE_SMALL_MARK_PX) {
-            return@filter stroke.points.any { envelope.contains(it.x, it.y, smallMarkMargin) }
+            return@filter stroke.points.any { envelope.contains(it.x, it.y, smallMarkMarginX, smallMarkMarginY) }
         }
         // Length-weighted: a segment counts as covered when both its ends lie under the scribble.
         val samples = densify(stroke.points)
