@@ -60,6 +60,20 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **An empty new page is gone when the notebook closes, and never syncs** (v0.2.6-claudi.16).
+  A page that has no stroke, no image and no sync row (`page_sync_state`) counts as *unwritten*
+  (`UnwrittenPages.kt`, decided from the database, so it survives a restart). Adding one —
+  turning past the last page, *add page* in the page menu or the page overview — no longer
+  stamps the notebook's `updatedAt`, so it does not make the notebook dirty and starts no
+  sync. While the notebook is open, a round that uploads it anyway (something else was written)
+  leaves unwritten pages out of the manifest, the dirty check and the structural conflict
+  check; a download keeps them in place (after the local page they followed, at the end if they
+  ended the notebook) instead of dropping them as orphans. Closing the editor waits for the
+  last stroke writes to land (at most 10 s, otherwise it keeps the pages) and then deletes the
+  unwritten pages, again without stamping the notebook; the book reopens on the page before.
+  A notebook never loses its last page: if every page is unwritten, the first stays and syncs.
+  The first stroke on such a page makes it an ordinary page (the write stamps the notebook).
+  For the bridge: a page appears on the server only once something is written on it.
 - **Scribble-to-erase, double tap, sync cancel, pen layer on the home screen, battery**
   (v0.2.6-claudi.13).
   - *Scribble to erase* (`ScribbleGeometry.kt`, pure Kotlin with tests). Upstream took any stroke

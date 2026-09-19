@@ -8,6 +8,7 @@ import com.ethran.notable.data.db.FolderRepository
 import com.ethran.notable.data.db.Image
 import com.ethran.notable.data.db.ImageRepository
 import com.ethran.notable.data.db.KvProxy
+import com.ethran.notable.data.db.Notebook
 import com.ethran.notable.data.db.NotebookSyncStateRepository
 import com.ethran.notable.data.db.Page
 import com.ethran.notable.data.db.PageRepository
@@ -114,7 +115,7 @@ class AppRepository @Inject constructor(
         // creating a new page
         val page = book!!.newPage()
         pageRepository.create(page)
-        bookRepository.addPage(notebookId, page.id)
+        bookRepository.addPage(notebookId, page.id, stamp = false)
         return page.id
     }
 
@@ -220,13 +221,43 @@ class AppRepository @Inject constructor(
         return page.id
     }
 
+    /** Fork: [notebook] as the server may see it, without its unwritten new pages. */
+    suspend fun withoutUnwrittenPages(notebook: Notebook): Notebook {
+        val held = unwrittenPagesToHold(notebook.pageIds, pageRepository.getUnwrittenIds(notebook.pageIds))
+        return if (held.isEmpty()) notebook else notebook.copy(pageIds = notebook.pageIds.filterNot { it in held })
+    }
+
+    /** Fork: the pages of [notebook] a sync must neither upload nor drop (see UnwrittenPages.kt). */
+    suspend fun heldPageIds(notebook: Notebook): Set<String> =
+        unwrittenPagesToHold(notebook.pageIds, pageRepository.getUnwrittenIds(notebook.pageIds))
+
+    /**
+     * Fork: closing a notebook deletes the pages added to it and never written on. The notebook's
+     * `updatedAt` stays: the server never saw those pages, so their going is no change to send.
+     * Returns the removed page ids.
+     */
+    suspend fun discardUnwrittenPages(notebookId: String): Set<String> = db.withTransaction {
+        val book = bookRepository.getById(notebookId) ?: return@withTransaction emptySet()
+        val removed = heldPageIds(book)
+        if (removed.isEmpty()) return@withTransaction emptySet()
+        bookRepository.updateVerbatim(
+            book.copy(
+                pageIds = book.pageIds.filterNot { it in removed },
+                openPageId = openPageAfterRemoval(book.pageIds, book.openPageId, removed),
+            )
+        )
+        removed.forEach { pageRepository.delete(it) }
+        log.i("Discarded ${removed.size} unwritten page(s) of ${book.title}")
+        removed
+    }
+
     suspend fun newPageInBook(notebookId: String, index: Int = 0): String? {
         try {
             val book = bookRepository.getById(notebookId)
                 ?: return null
             val page = book.newPage()
             pageRepository.create(page)
-            bookRepository.addPage(notebookId, page.id, index)
+            bookRepository.addPage(notebookId, page.id, index, stamp = false)
             return page.id
         } catch (e: Exception) {
             log.e("Failed to create page in book: ${e.message}")

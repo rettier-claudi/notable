@@ -331,7 +331,9 @@ class NotebookReconciliationService @Inject constructor(
         val pageConflicts = notebookSyncService.detectPageConflicts(localNotebook, client)
             .getOrElse { return AppResult.Error(it) }
         val structural =
-            remoteNotebook == null || notebookSyncService.structurallyDiverges(localNotebook, remoteNotebook)
+            remoteNotebook == null || notebookSyncService.structurallyDiverges(
+                appRepository.withoutUnwrittenPages(localNotebook), remoteNotebook
+            )
 
         if (pageConflicts.isNotEmpty() || structural) {
             log.i(

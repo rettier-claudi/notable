@@ -183,7 +183,7 @@ class EditorSelectionThreadSafetyTests {
         val exportEngine = mockk<ExportEngine>(relaxed = true)
         val pageDataManager = mockk<PageDataManager>(relaxed = true)
         val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true).also {
-            coEvery { it.syncFromPageId(any()) } returns Unit
+            coEvery { it.syncFromPageId(any(), any()) } returns Unit
         }
         val snackDispatcher = mockk<SnackDispatcher>(relaxed = true)
 

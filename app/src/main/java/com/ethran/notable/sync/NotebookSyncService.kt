@@ -11,6 +11,7 @@ import com.ethran.notable.data.db.PageSyncState
 import com.ethran.notable.data.ensureBackgroundsFolder
 import com.ethran.notable.data.ensureImagesFolder
 import com.ethran.notable.sync.PageSyncSelector.selectDirtyPages
+import com.ethran.notable.data.keepHeldPages
 import com.ethran.notable.sync.serializers.NotebookSerializer
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.utils.DomainError
@@ -386,7 +387,8 @@ class NotebookSyncService @Inject constructor(
      * when this is false, so two devices that have already converged don't churn the manifest ETag
      * back and forth and re-trigger each other's reconcile forever.
      */
-    suspend fun hasLocallyDirtyPages(notebook: Notebook): Boolean {
+    suspend fun hasLocallyDirtyPages(localNotebook: Notebook): Boolean {
+        val notebook = appRepository.withoutUnwrittenPages(localNotebook)
         val pages = appRepository.pageRepository.getByIds(notebook.pageIds)
         val rowsByPageId =
             appRepository.pageSyncStateRepository.getByNotebook(notebook.id).associateBy { it.pageId }
@@ -502,7 +504,8 @@ class NotebookSyncService @Inject constructor(
         val remote = client.getFile(SyncPaths.manifestFile(notebook.id))
             .flatMap { NotebookSerializer.deserializeManifest(it.decodeToString()) }
             .getOrElse { return AppResult.Success(NotebookConflict(pageConflicts, structural = true)) }
-        return AppResult.Success(NotebookConflict(pageConflicts, structurallyDiverges(notebook, remote)))
+        val local = appRepository.withoutUnwrittenPages(notebook)
+        return AppResult.Success(NotebookConflict(pageConflicts, structurallyDiverges(local, remote)))
     }
 
     /**
@@ -547,10 +550,12 @@ class NotebookSyncService @Inject constructor(
     }
 
     private suspend fun uploadNotebookInternal(
-        notebook: Notebook,
+        localNotebook: Notebook,
         client: WebDAVClient,
         manifestIfMatch: ETag? = null
     ): AppResult<Unit, DomainError> {
+        // Fork: a page added here and never written on stays off the server (UnwrittenPages.kt).
+        val notebook = appRepository.withoutUnwrittenPages(localNotebook)
         val notebookId = notebook.id
         log.i(TAG, "Uploading: ${notebook.title} (${notebook.pageIds.size} pages)")
 
@@ -1122,7 +1127,13 @@ class NotebookSyncService @Inject constructor(
         if (parentFolderId != manifestNotebook.parentFolderId) {
             log.w(TAG, "Folder ${manifestNotebook.parentFolderId} of ${manifestNotebook.title} is unknown here; placing it in the root")
         }
-        val notebook = manifestNotebook.copy(parentFolderId = parentFolderId)
+        // Fork: pages added here and never written on are not on the server, so the server's page
+        // list must not drop them — they may be open in the editor right now (UnwrittenPages.kt).
+        val heldPageIds = existingBook?.let { appRepository.heldPageIds(it) }.orEmpty()
+        val notebook = manifestNotebook.copy(
+            parentFolderId = parentFolderId,
+            pageIds = keepHeldPages(manifestNotebook.pageIds, existingBook?.pageIds.orEmpty(), heldPageIds),
+        )
         if (isNew) {
             try {
                 appRepository.bookRepository.createEmpty(notebook.copy(updatedAt = Date(0)))
@@ -1161,7 +1172,7 @@ class NotebookSyncService @Inject constructor(
         // Backgrounds are often shared across pages (e.g. a PDF); fetch each distinct one once.
         val attemptedBackgrounds = mutableSetOf<String>()
         var fetched = 0
-        for (pageId in notebook.pageIds) {
+        for (pageId in manifestNotebook.pageIds) {
             val currentEtag = currentEtagByPageId[pageId]
             val storedEtag = ETag.parse(rowsByPageId[pageId]?.remoteEtag)
             // An unreadable remote ETag is spelled out rather than left to `matches` returning
@@ -1185,7 +1196,7 @@ class NotebookSyncService @Inject constructor(
                 )
             }.onError { errors.add(it) }
         }
-        log.i(TAG, "Downloaded $fetched/${notebook.pageIds.size} changed page(s) for ${notebook.title}")
+        log.i(TAG, "Downloaded $fetched/${manifestNotebook.pageIds.size} changed page(s) for ${notebook.title}")
 
         // 6. Commit: only when every fetched page landed, write the notebook row with the real remote
         //    timestamp. On any failure the notebook keeps its old/sentinel timestamp, so the next

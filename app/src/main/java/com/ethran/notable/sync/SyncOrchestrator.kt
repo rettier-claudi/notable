@@ -356,12 +356,14 @@ class SyncOrchestrator @Inject constructor(
         )
     }
 
-    suspend fun syncFromPageId(pageId: String) {
+    suspend fun syncFromPageId(pageId: String, knownNotebookId: String? = null) {
         val settings = kvProxy.getSyncSettings()
         if (!settings.syncEnabled || !settings.syncOnNoteClose) return
         try {
-            val page = appRepository.pageRepository.getById(pageId) ?: return
-            val notebookId = page.notebookId
+            // Fork: the notebook is passed when known — the closing page may just have been
+            // discarded as unwritten, and the notebook still gets its close sync.
+            val notebookId = knownNotebookId
+                ?: (appRepository.pageRepository.getById(pageId) ?: return).notebookId
             if (notebookId != null) syncNotebook(notebookId)
             else if (settings.syncQuickPages) syncQuickPages()
         } catch (e: Exception) {

@@ -83,6 +83,15 @@ interface PageDao {
     @Query("SELECT id FROM page WHERE notebookId = :notebookId")
     suspend fun getPageIdsForNotebook(notebookId: String): List<String>
 
+    // Fork: of [ids], the pages nobody wrote on and no sync ever saw (see UnwrittenPages.kt).
+    @Query(
+        "SELECT id FROM page WHERE id IN (:ids)" +
+            " AND NOT EXISTS (SELECT 1 FROM stroke WHERE stroke.pageId = page.id)" +
+            " AND NOT EXISTS (SELECT 1 FROM image WHERE image.pageId = page.id)" +
+            " AND NOT EXISTS (SELECT 1 FROM page_sync_state s WHERE s.pageId = page.id)"
+    )
+    suspend fun getUnwrittenIds(ids: List<String>): List<String>
+
     /** Every quick page (no notebook), regardless of folder -- the quick-page sync's local set. */
     @Query("SELECT * FROM page WHERE notebookId is null")
     suspend fun getAllSinglePages(): List<Page>
@@ -142,6 +151,12 @@ class PageRepository @Inject constructor(
 
     suspend fun getPageIdsForNotebook(notebookId: String): List<String> {
         return db.getPageIdsForNotebook(notebookId)
+    }
+
+    suspend fun getUnwrittenIds(ids: List<String>): Set<String> {
+        if (ids.isEmpty()) return emptySet()
+        // SQLite's bound-parameter limit; notebooks are far below it, but a huge one must not crash.
+        return ids.chunked(900).flatMap { db.getUnwrittenIds(it) }.toSet()
     }
     suspend fun getWithDataById(pageId: String): PageWithData? {
         val data = db.getPageWithDataById(pageId)

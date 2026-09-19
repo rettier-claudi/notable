@@ -384,9 +384,21 @@ class EditorViewModel @Inject constructor(
         //    editor is closing, so nothing will overwrite a newer remote copy (P18).
         //    Not while a send is running: it runs a full sync of its own, and a sync-on-close
         //    holding the engine's lock would only make that one bounce off ("in progress").
+        //    Fork: first drop the pages added and never written on (UnwrittenPages.kt) — only once
+        //    the last strokes have landed, and not at all if they do not land in time.
         val closingPageId = currentPageId
-        if (syncWebhookNotifier.pending.value) return
-        appScope.launch { syncOrchestrator.syncFromPageId(closingPageId) }
+        val closingBookId = bookId
+        val sendPending = syncWebhookNotifier.pending.value
+        appScope.launch {
+            if (closingBookId != null) {
+                if (pageDataManager.awaitPendingWrites()) {
+                    appRepository.discardUnwrittenPages(closingBookId)
+                } else {
+                    log.w("Writes still pending on close; keeping unwritten pages of $closingBookId")
+                }
+            }
+            if (!sendPending) syncOrchestrator.syncFromPageId(closingPageId, closingBookId)
+        }
     }
 
     fun createHistory(page: PageView): History = historyFactory.create(page)

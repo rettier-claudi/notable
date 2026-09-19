@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import java.io.File
 import java.lang.ref.SoftReference
@@ -1239,6 +1240,16 @@ class PageDataManager @Inject constructor(
      * the thumbnail used to be saved on a page change inside a notebook but never on closing it.
      * The refresh only renders when the page was edited after its thumbnail.
      */
+    /**
+     * Fork: suspend until the content writes started so far have landed (at most [timeoutMs]).
+     * Deciding "was anything written on this page" before the last stroke is in the DB would
+     * delete a page with ink on it.
+     */
+    suspend fun awaitPendingWrites(timeoutMs: Long = 10_000L): Boolean {
+        val pendingWrites = dataScope.coroutineContext.job.children.toList()
+        return withTimeoutOrNull(timeoutMs) { pendingWrites.joinAll() } != null
+    }
+
     private fun refreshThumbnailAfterWrites(pageId: String) {
         // Snapshot before launching, so the waiter does not wait for itself.
         val pendingWrites = dataScope.coroutineContext.job.children.toList()

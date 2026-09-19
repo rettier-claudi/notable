@@ -174,12 +174,16 @@ class BookRepository @Inject constructor(
         notebookDao.setOpenPageId(id, pageId)
     }
 
-    suspend fun addPage(bookId: String, pageId: String, index: Int? = null) {
+    /**
+     * [stamp] = false (fork) leaves `updatedAt` alone: for a fresh empty page, which the sync does
+     * not see until something is written on it (UnwrittenPages.kt).
+     */
+    suspend fun addPage(bookId: String, pageId: String, index: Int? = null, stamp: Boolean = true) {
         val notebook = notebookDao.getById(bookId) ?: return
         val pageIds = notebook.pageIds.toMutableList()
         if (index != null) pageIds.add(index, pageId)
         else pageIds.add(pageId)
-        notebookDao.setPageIds(bookId, pageIds, Date())
+        notebookDao.setPageIds(bookId, pageIds, if (stamp) Date() else notebook.updatedAt)
     }
 
     suspend fun removePage(id: String, pageId: String) {
