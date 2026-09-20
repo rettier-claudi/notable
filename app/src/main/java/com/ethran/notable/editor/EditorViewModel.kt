@@ -113,6 +113,10 @@ data class ToolbarUiState(
     val syncBusy: Boolean = false,
     /** A "sync and notify" is running: sync in flight or webhook POST pending. */
     val syncNotifyPending: Boolean = false,
+    /** The "Really send?" question is up. Send is the one irreversible button in the editor --
+     * it locks a quick page for good and hands the page to the bridge -- and both ways to reach
+     * it (toolbar button, two-finger swipe) are easy to hit by accident. */
+    val isSendConfirmOpen: Boolean = false,
 
     // Sent state (see SentMarkStore)
     /** This quick page was sent: read-only for good. */
@@ -127,7 +131,8 @@ data class ToolbarUiState(
 
     val isDrawingAllowed: Boolean
         get() = !isSelectionActive &&
-                !(isMenuOpen || isStrokeSelectionOpen || isBackgroundSelectorModalOpen)
+                !(isMenuOpen || isStrokeSelectionOpen || isBackgroundSelectorModalOpen ||
+                        isSendConfirmOpen)
                 && !isQuickNavOpen
                 && !isPageLocked
 }
@@ -166,6 +171,10 @@ sealed class ToolbarAction {
     object SyncNow : ToolbarAction()
     object CancelSync : ToolbarAction()
     object SyncAndNotify : ToolbarAction()
+
+    /** Answers to the "Really send?" question (see [ToolbarUiState.isSendConfirmOpen]). */
+    object SendConfirmed : ToolbarAction()
+    object SendDismissed : ToolbarAction()
 
     object CloseAllMenus : ToolbarAction()
     data class UpdateQuickNavOpen(val isOpen: Boolean) : ToolbarAction()
@@ -482,7 +491,19 @@ class EditorViewModel @Inject constructor(
                 repaintToolbar()
             }
 
-            ToolbarAction.SyncAndNotify -> handleSend()
+            ToolbarAction.SyncAndNotify -> handleAskSend()
+
+            ToolbarAction.SendConfirmed -> {
+                _toolbarState.update { it.copy(isSendConfirmOpen = false) }
+                updateDrawingState()
+                handleSend()
+            }
+
+            ToolbarAction.SendDismissed -> {
+                _toolbarState.update { it.copy(isSendConfirmOpen = false) }
+                updateDrawingState()
+                repaintToolbar()
+            }
 
             ToolbarAction.CloseAllMenus -> handleCloseAllMenus()
             is ToolbarAction.UpdateQuickNavOpen -> {
@@ -497,7 +518,32 @@ class EditorViewModel @Inject constructor(
     // --------------------------------------------------------
 
     /**
-     * "Send" (toolbar button or gesture): sync + notify in the background, back to the home screen
+     * "Send" (toolbar button or gesture) asks first. The button sits next to the sync button and
+     * the gesture is a two-finger swipe, so both get hit by accident -- and sending is not
+     * undoable: the page goes to the bridge and a quick page is locked for good. Philipp
+     * 2026-09-20, after a Heute page went out unnoticed at 10:20: "kannst du einen confirm dialog
+     * einbauen".
+     *
+     * The reasons not to send at all (sync off, no webhook, one still in flight) are checked
+     * before the question, not after -- asking and then refusing would be the worse order.
+     */
+    private fun handleAskSend() {
+        val state = _toolbarState.value
+        if (!state.syncEnabled || !state.syncWebhookConfigured) {
+            showHint("Sending needs sync and a notify URL (Settings > Sync)", 3000)
+            return
+        }
+        if (state.syncNotifyPending) {
+            showHint("Still sending the previous page", 2000)
+            return
+        }
+        _toolbarState.update { it.copy(isSendConfirmOpen = true) }
+        updateDrawingState()
+        repaintToolbar()
+    }
+
+    /**
+     * The send itself, once confirmed: sync + notify in the background, back to the home screen
      * right away. Lock / mark follow only once both worked (SyncWebhookNotifier).
      */
     private fun handleSend() {

@@ -32,6 +32,7 @@ import com.ethran.notable.editor.ui.toolbar.model.ToolbarLayout
 import com.ethran.notable.editor.ui.toolbar.model.ToolbarPen
 import com.ethran.notable.editor.utils.Pen
 import com.ethran.notable.ui.dialogs.BackgroundSelector
+import com.ethran.notable.ui.dialogs.ShowSimpleConfirmationDialog
 
 /**
  * Spec-driven toolbar: iterates a [ToolbarLayout] and renders each element through
@@ -50,8 +51,25 @@ fun ToolbarContent(
     }
 
     // On exit or change of toolbar states, check if we should allow raw drawing
-    LaunchedEffect(uiState.isBackgroundSelectorModalOpen, uiState.isMenuOpen) {
+    LaunchedEffect(
+        uiState.isBackgroundSelectorModalOpen, uiState.isMenuOpen, uiState.isSendConfirmOpen
+    ) {
         onDrawingStateCheck()
+    }
+
+    // Above the collapsed-toolbar return on purpose: the two-finger swipe sends with the toolbar
+    // closed, and that is the way it gets hit by accident.
+    if (uiState.isSendConfirmOpen) {
+        ShowSimpleConfirmationDialog(
+            title = "Really send?",
+            message = if (uiState.isBookActive)
+                "The notebook goes to the bridge and moves to Today."
+            else
+                "The page goes to the bridge and is locked here afterwards.",
+            confirmButtonText = "Send",
+            onConfirm = { onAction(ToolbarAction.SendConfirmed) },
+            onCancel = { onAction(ToolbarAction.SendDismissed) },
+        )
     }
 
     if (uiState.isBackgroundSelectorModalOpen) {

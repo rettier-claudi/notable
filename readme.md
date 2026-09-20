@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Send asks first** (v0.2.6-claudi.17). Send is the one button in the editor that cannot be
+  taken back — the page goes to the bridge, and a quick page is locked for good — and both ways
+  to reach it are easy to hit by accident: the toolbar button sits next to plain *sync*, and the
+  gesture is a two-finger swipe. It now puts up *Really send?* first
+  (`ToolbarUiState.isSendConfirmOpen`, rendered in `Toolbar.kt` above the collapsed-toolbar
+  return, because the swipe works with the toolbar closed). Drawing is off while the question is
+  up. The reasons not to send at all — sync off, no notify URL, one still in flight — are still
+  checked before the question, so it never asks and then refuses. Occasion: on 2026-09-20 a
+  *Heute* page went out at 10:20:43 without Philipp noticing, and the midday run read it a second
+  time as a `## Nachtrag`.
 - **An empty new page is gone when the notebook closes, and never syncs** (v0.2.6-claudi.16).
   A page that has no stroke, no image and no sync row (`page_sync_state`) counts as *unwritten*
   (`UnwrittenPages.kt`, decided from the database, so it survives a restart). Adding one —
