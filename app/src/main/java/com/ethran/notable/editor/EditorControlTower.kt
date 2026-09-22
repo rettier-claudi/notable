@@ -191,6 +191,7 @@ class EditorControlTower(
 
     override fun onPinchToZoom(delta: Float, center: Offset?) {
         if (!page.isTransformationAllowed) return
+        if (GlobalAppSettings.current.disableZoom) return
         // Zooming under an active selection (floating bitmap, in-progress page
         // cut) would desync the screen-space overlay from the strokes below it;
         // with the select tool merely armed, zooming is fine.

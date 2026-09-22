@@ -113,6 +113,30 @@ class NotableNavigator(
         navController.navigate(LibraryDestination.createRoute(folderId))
     }
 
+    // Fork: the library folder shown last (null = Workspace), so leaving a page returns there.
+    private var lastLibraryFolderId: String? = null
+
+    fun rememberLibraryFolder(folderId: String?) {
+        lastLibraryFolderId = folderId
+    }
+
+    /**
+     * Fork: leave the editor (home button, GoHome gesture, send) to the folder the page was opened
+     * from. If a sync deleted that folder meanwhile, fall back to the Workspace.
+     */
+    fun leaveEditor(appRepository: AppRepository) {
+        val folderId = lastLibraryFolderId ?: return goToLibrary(null)
+        coroutineScope.launch {
+            val exists = runCatching {
+                withContext(Dispatchers.IO) { appRepository.folderRepository.get(folderId) != null }
+            }.onFailure {
+                log.w("Failed to look up folder $folderId", it)
+            }.getOrDefault(false)
+            if (!exists) log.i("Previous folder $folderId is gone, leaving to the Workspace")
+            goToLibrary(if (exists) folderId else null)
+        }
+    }
+
     fun goToEditor(pageId: String, bookId: String?) {
         navController.navigate(EditorDestination.createRoute(pageId, bookId))
     }

@@ -64,6 +64,7 @@ fun NotableNavHost(
                         )
                     }
                 )
+                appNavigator.rememberLibraryFolder(it.arguments?.getString(LibraryDestination.FOLDER_ID_ARG))
                 appNavigator.cleanCurrentPageId()
             }
             composable(
@@ -100,6 +101,7 @@ fun NotableNavHost(
 
                 EditorView(
                     goToLibrary = {appNavigator.goToLibrary(it)},
+                    leaveToPreviousFolder = { appNavigator.leaveEditor(appRepository) },
                     goToPages = { bookId -> appNavigator.goToPages(bookId) },
                     goToBugReport = { appNavigator.goToBugReport() },
                     bookId = bookId,

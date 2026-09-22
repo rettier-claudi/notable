@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Leaving a page returns to the folder it was opened from; zoom can be switched off**
+  (v0.2.6-claudi.18). The home button, the *GoHome* gesture and *Send* used to land on the
+  Workspace every time. They now go back to the library folder shown last
+  (`NotableNavigator.leaveEditor`, remembered by the library route itself); if a sync removed that
+  folder in the meantime, they fall back to the Workspace. The menu's *Library* entry still opens
+  the page's own folder. *Settings → General → Disable zoom* (`AppSettings.disableZoom`) makes a
+  pinch do nothing, in both the continuous and the snap-zoom mode, checked again in
+  `EditorControlTower.onPinchToZoom`; two fingers still pan a page that is already zoomed, and the
+  toolbar's reset-view button still takes it back to 100 %. Occasion: Philipp kept zooming by
+  accident.
 - **Send asks first** (v0.2.6-claudi.17). Send is the one button in the editor that cannot be
   taken back — the page goes to the bridge, and a quick page is locked for good — and both ways
   to reach it are easy to hit by accident: the toolbar button sits next to plain *sync*, and the

@@ -201,6 +201,9 @@ sealed class CanvasCommand {
 
 sealed class EditorUiEvent {
     data class NavigateToLibrary(val folderId: String?) : EditorUiEvent()
+
+    /** Fork: leave the editor to the folder it was opened from (Workspace if that is gone). */
+    object LeaveToPreviousFolder : EditorUiEvent()
     data class NavigateToPages(val bookId: String) : EditorUiEvent()
     object NavigateToBugReport : EditorUiEvent()
 }
@@ -476,7 +479,7 @@ class EditorViewModel @Inject constructor(
             ToolbarAction.NavigateToLibrary -> handleNavigateToLibrary()
             ToolbarAction.NavigateToBugReport -> sendUiEvent(EditorUiEvent.NavigateToBugReport)
             ToolbarAction.NavigateToPages -> handleNavigateToPages()
-            ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
+            ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.LeaveToPreviousFolder)
             ToolbarAction.SyncNow -> {
                 // Named so the round covers this notebook whatever folder it is in (SyncScope).
                 syncScheduler.triggerImmediateSync(SyncRequest.SyncAll(notebookId = bookId))
@@ -543,8 +546,8 @@ class EditorViewModel @Inject constructor(
     }
 
     /**
-     * The send itself, once confirmed: sync + notify in the background, back to the home screen
-     * right away. Lock / mark follow only once both worked (SyncWebhookNotifier).
+     * The send itself, once confirmed: sync + notify in the background, back to the folder the page
+     * was opened from right away. Lock / mark follow only once both worked (SyncWebhookNotifier).
      */
     private fun handleSend() {
         val state = _toolbarState.value
@@ -557,7 +560,7 @@ class EditorViewModel @Inject constructor(
             repaintToolbar()
             return
         }
-        sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
+        sendUiEvent(EditorUiEvent.LeaveToPreviousFolder)
     }
 
     private fun handlePenChange(presetId: String) {
@@ -904,7 +907,7 @@ class EditorViewModel @Inject constructor(
                             if (bookId != null) {
                                 appRepository.bookRepository.removePage(bookId, pageId)
                             }
-                            sendUiEvent(EditorUiEvent.NavigateToLibrary(null))
+                            sendUiEvent(EditorUiEvent.LeaveToPreviousFolder)
                         }
                     }
                 )

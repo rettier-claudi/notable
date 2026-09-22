@@ -46,6 +46,9 @@ data class AppSettings(
     // allowed while zoomed so the visible part of a zoomed page can be chosen.
     val disableScrolling: Boolean = false,
     val continuousZoom: Boolean = false,
+    // Fork: pinching never zooms (neither continuous nor snap zoom); two fingers still pan when zoomed
+    // and the toolbar's reset-view button still brings a zoomed page back to 100 %.
+    val disableZoom: Boolean = false,
     val continuousStrokeSlider: Boolean = false,
     val paginatePdf: Boolean = true,
     val visualizePdfPagination: Boolean = false,
@@ -101,6 +104,10 @@ data class AppSettings(
         /** "Sync and notify", the toolbar's send button: sync, notify, lock/mark, home. */
         Send,
     }
+
+    /** A pinch zooms along with the fingers (continuous zoom on, zoom not disabled). */
+    val pinchZoomsContinuously: Boolean
+        get() = continuousZoom && !disableZoom
 
     /** A two-finger swipe has an action, so horizontal two-finger movement is not a pan. */
     val twoFingerSwipeAssigned: Boolean

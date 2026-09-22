@@ -245,7 +245,7 @@ private fun applyModeTransitions(recognizer: Recognizer, ctx: GestureContext) {
             tracker,
             recognizer.mode,
             ctx.thresholds,
-            ctx.appSettings.continuousZoom,
+            ctx.appSettings.pinchZoomsContinuously,
             reserveHorizontalSwipe = ctx.appSettings.twoFingerSwipeAssigned && ctx.actions.isAtBaseZoom(),
         )
     )
@@ -264,7 +264,7 @@ private fun streamActiveMode(recognizer: Recognizer, ctx: GestureContext) {
             // Zoom and pan together: scale about the pinch center, then
             // translate by the centroid delta (the same point for two
             // fingers), so the content stays under the fingers.
-            if (ctx.appSettings.continuousZoom) {
+            if (ctx.appSettings.pinchZoomsContinuously) {
                 val zoom = recognizer.tracker.consumePinchDelta()
                 if (zoom != 0f)
                     ctx.actions.onPinchToZoom(zoom, recognizer.tracker.pinchCenter())
@@ -328,7 +328,7 @@ private suspend fun AwaitPointerEventScope.handleGestureEnd(
         mode = recognizer.mode,
         flags = GestureFlags(
             smoothScroll = ctx.appSettings.smoothScroll,
-            continuousZoom = ctx.appSettings.continuousZoom,
+            continuousZoom = ctx.appSettings.pinchZoomsContinuously,
         ),
         thresholds = ctx.thresholds,
     )
@@ -389,6 +389,10 @@ private fun dispatchEvent(event: GestureEvent, ctx: GestureContext) {
             resolveGesture(ctx.appSettings.holdAction, ctx, event.rect.toAndroidRect())
 
         is GestureEvent.PinchZoom -> {
+            if (ctx.appSettings.disableZoom) {
+                log.d("Discrete zoom ignored: zoom disabled in settings")
+                return
+            }
             log.d("Discrete zoom: ${event.delta}")
             // Discrete zoom snaps to fixed levels (fit-width / 100%), which are
             // focal-point independent, so no pinch center is passed.

@@ -54,6 +54,13 @@ fun GeneralSettings(
             })
 
         SettingToggleRow(
+            label = stringResource(R.string.disable_zoom),
+            value = settings.disableZoom,
+            onToggle = { isChecked ->
+                onSettingsChange(settings.copy(disableZoom = isChecked))
+            })
+
+        SettingToggleRow(
             label = stringResource(R.string.continuous_zoom),
             value = settings.continuousZoom,
             onToggle = { isChecked ->

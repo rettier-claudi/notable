@@ -18,6 +18,7 @@
     <string name="enable_scribble_to_erase">Zamaż aby usunąć</string>
     <string name="enable_smooth_scrolling">Włącz płynne przewijanie</string>
     <string name="disable_scrolling">Stałe strony — wyłącz przewijanie (płótno nie przesuwa się przy 100% powiększenia)</string>
+    <string name="disable_zoom">Wyłącz przybliżanie — szczypanie nigdy nie przybliża</string>
     <string name="continuous_zoom">Włącz płynne przybliżanie</string>
     <string name="continuous_stroke_slider">Płynny regulator grubości kreski</string>
     <string name="rename_on_create">Otwórz ustawienia notatknika przy tworzeniu nowego</string>

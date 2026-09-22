@@ -64,6 +64,7 @@ fun EditorView(
     // navigation callbacks
     onPageChange: (String) -> Unit,
     goToLibrary: (folderId: String?) -> Unit,
+    leaveToPreviousFolder: () -> Unit,
     goToPages: (bookId: String) -> Unit,
     goToBugReport: () -> Unit,
 
@@ -137,6 +138,10 @@ fun EditorView(
                 when (event) {
                     is EditorUiEvent.NavigateToLibrary -> {
                         goToLibrary(event.folderId)
+                    }
+
+                    EditorUiEvent.LeaveToPreviousFolder -> {
+                        leaveToPreviousFolder()
                     }
 
                     is EditorUiEvent.NavigateToPages -> {
