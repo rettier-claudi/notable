@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Opening a page starts with the first pen** (v0.2.6-claudi.19). The editor used to come up
+  with whatever tool was last in hand — the marker, the eraser, selection — carried over from the
+  previous page. Entering a page from outside the editor (library, a folder, the pages overview)
+  now always selects the first pen button of the toolbar (`ToolbarLayout.firstPen`: first
+  `PEN:<id>` entry, left zone before the pinned one; first preset if the layout shows no pen) in
+  draw mode. A quick-nav jump from one page to another keeps the current tool. Decided once per
+  editor entry (`NotableNavigator.takeFirstPenStart`, kept in the entry's saved state), so coming
+  back to an open page or a restore after the app was killed keeps what was picked since. The
+  reset is saved like a pen tap, so the next quick-nav jump carries it on. Occasion: Philipp's
+  wish on 2026-09-23.
 - **Leaving a page returns to the folder it was opened from; zoom can be switched off**
   (v0.2.6-claudi.18). The home button, the *GoHome* gesture and *Send* used to land on the
   Workspace every time. They now go back to the library folder shown last

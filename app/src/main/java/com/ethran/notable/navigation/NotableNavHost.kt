@@ -5,6 +5,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -98,6 +99,8 @@ fun NotableNavHost(
                 val bookId = backStackEntry.arguments?.getString(EditorDestination.BOOK_ID_ARG)
 
                 val currentPageId = appNavigator.resolveAndSyncPageId(backStackEntry)
+                val startWithFirstPen =
+                    remember(backStackEntry) { appNavigator.takeFirstPenStart(backStackEntry) }
 
                 EditorView(
                     goToLibrary = {appNavigator.goToLibrary(it)},
@@ -106,6 +109,7 @@ fun NotableNavHost(
                     goToBugReport = { appNavigator.goToBugReport() },
                     bookId = bookId,
                     initialPageId = currentPageId,
+                    startWithFirstPen = startWithFirstPen,
                     isQuickNavOpen = appNavigator.isQuickNavOpen,
                     onPageChange = { newPageId ->
                         log.d("onPageChange: $newPageId")

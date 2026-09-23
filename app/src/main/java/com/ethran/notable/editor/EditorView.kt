@@ -60,6 +60,7 @@ fun EditorView(
     initialPageId: String,
     bookId: String?,
     isQuickNavOpen: Boolean,
+    startWithFirstPen: Boolean,
 
     // navigation callbacks
     onPageChange: (String) -> Unit,
@@ -119,7 +120,7 @@ fun EditorView(
 
         // Initialize ViewModel with persisted settings on first composition
         LaunchedEffect(Unit) {
-            viewModel.initFromPersistedSettings()
+            viewModel.initFromPersistedSettings(startWithFirstPen)
             viewModel.updateDrawingState()
         }
 

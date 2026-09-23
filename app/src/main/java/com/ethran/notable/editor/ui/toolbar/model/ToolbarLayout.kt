@@ -57,6 +57,18 @@ data class ToolbarLayout(
         return ToolbarLayout(cleanScrollable, cleanPinned)
     }
 
+    /**
+     * Fork: the pen button the user sees first — the first `"PEN:<id>"` entry, left zone before
+     * the pinned one, whose preset still exists. Falls back to the first preset when the layout
+     * shows no pen at all.
+     */
+    fun firstPen(pens: List<ToolbarPen>): ToolbarPen? =
+        (scrollable + pinned).asSequence()
+            .filter { it.startsWith(ToolbarPen.LAYOUT_PREFIX) }
+            .mapNotNull { name -> pens.find { it.layoutEntry == name } }
+            .firstOrNull()
+            ?: pens.firstOrNull()
+
     companion object {
         /** References the stable seed ids of [ToolbarPen.DEFAULT_PENS]. */
         val DEFAULT = ToolbarLayout(

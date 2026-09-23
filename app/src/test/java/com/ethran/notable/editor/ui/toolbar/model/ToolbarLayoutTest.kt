@@ -126,4 +126,43 @@ class ToolbarLayoutTest {
         assertEquals(listOf("PEN:ball"), decoded.scrollable)
         assertEquals(listOf("MENU"), decoded.pinned)
     }
+
+    @Test
+    fun `first pen of the default layout is the black ballpen`() {
+        assertEquals("ball", ToolbarLayout.DEFAULT.firstPen(pens)?.id)
+    }
+
+    @Test
+    fun `first pen follows the layout order, not the preset list`() {
+        val layout = ToolbarLayout(
+            scrollable = listOf("ERASER", "PEN:marker", "PEN:ball"),
+            pinned = listOf("MENU"),
+        )
+        assertEquals("marker", layout.firstPen(pens)?.id)
+    }
+
+    @Test
+    fun `first pen skips entries whose preset was deleted`() {
+        val layout = ToolbarLayout(
+            scrollable = listOf("PEN:deleted", "PEN:blue"),
+            pinned = listOf("MENU"),
+        )
+        assertEquals("blue", layout.firstPen(pens)?.id)
+    }
+
+    @Test
+    fun `first pen looks into the pinned zone after the scrollable one`() {
+        val layout = ToolbarLayout(
+            scrollable = listOf("ERASER"),
+            pinned = listOf("PEN:green", "MENU"),
+        )
+        assertEquals("green", layout.firstPen(pens)?.id)
+    }
+
+    @Test
+    fun `first pen falls back to the first preset when the layout shows none`() {
+        val layout = ToolbarLayout(scrollable = listOf("ERASER"), pinned = listOf("MENU"))
+        assertEquals("ball", layout.firstPen(pens)?.id)
+        assertEquals(null, layout.firstPen(emptyList()))
+    }
 }

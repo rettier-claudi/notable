@@ -21,6 +21,7 @@ import com.ethran.notable.editor.state.ClipboardStore
 import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.state.Mode
 import com.ethran.notable.editor.state.SelectionState
+import com.ethran.notable.editor.ui.toolbar.model.ToolbarLayout
 import com.ethran.notable.editor.ui.toolbar.model.ToolbarPen
 import com.ethran.notable.editor.utils.DeviceCompat
 import com.ethran.notable.editor.utils.Eraser
@@ -355,17 +356,26 @@ class EditorViewModel @Inject constructor(
     /**
      * Restores editor settings from the persisted cache.
      * Idempotent: only applies settings on first call; subsequent calls are no-ops.
+     *
+     * Fork: with [startWithFirstPen] (the page was entered from outside the editor, see
+     * NotableNavigator.takeFirstPenStart) the first pen of the toolbar is selected instead of the
+     * last-used tool, and persisted, so a quick-nav jump from here carries it on.
      */
-    fun initFromPersistedSettings() {
+    fun initFromPersistedSettings(startWithFirstPen: Boolean = false) {
         if (!didInitSettings.compareAndSet(false, true)) return
         val settings = editorSettingCacheManager.getEditorSettings()
-        val pens = GlobalAppSettings.current.toolbarPens
-        // Restore the last-used preset; fall back to the first preset if it was deleted
-        // (or the cache predates presets and was discarded by its version gate).
-        val preset = pens.find { it.id == settings?.penPresetId } ?: pens.firstOrNull()
+        val appSettings = GlobalAppSettings.current
+        val pens = appSettings.toolbarPens
+        val preset = if (startWithFirstPen) {
+            (appSettings.toolbarLayout?.validated(pens) ?: ToolbarLayout.DEFAULT).firstPen(pens)
+        } else {
+            // Restore the last-used preset; fall back to the first preset if it was deleted
+            // (or the cache predates presets and was discarded by its version gate).
+            pens.find { it.id == settings?.penPresetId } ?: pens.firstOrNull()
+        }
         _toolbarState.update {
             it.copy(
-                mode = settings?.mode ?: Mode.Draw,
+                mode = if (startWithFirstPen) Mode.Draw else settings?.mode ?: Mode.Draw,
                 pen = preset?.pen ?: Pen.BALLPEN,
                 penPresetId = preset?.id ?: it.penPresetId,
                 eraser = settings?.eraser ?: Eraser.PEN,
@@ -374,6 +384,7 @@ class EditorViewModel @Inject constructor(
                     .ifEmpty { DEFAULT_PEN_SETTINGS }
             )
         }
+        if (startWithFirstPen) saveToolbarState()
     }
 
     /**

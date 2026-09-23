@@ -137,6 +137,21 @@ class NotableNavigator(
         }
     }
 
+    /**
+     * Fork: whether this editor entry starts with the toolbar's first pen. Yes when the page was
+     * entered from outside the editor (library, pages overview); no for a quick-nav jump from
+     * another page, which keeps the tool in hand. Decided once per entry and remembered in its
+     * saved state, so coming back to it or a restore after process death keeps whatever the user
+     * picked since.
+     */
+    fun takeFirstPenStart(backStackEntry: NavBackStackEntry): Boolean {
+        val handle = backStackEntry.savedStateHandle
+        if (handle.get<Boolean>(FIRST_PEN_DECIDED) == true) return false
+        handle[FIRST_PEN_DECIDED] = true
+        val below = navController.previousBackStackEntry?.destination?.route
+        return below != EditorDestination.routeWithArgs
+    }
+
     fun goToEditor(pageId: String, bookId: String?) {
         navController.navigate(EditorDestination.createRoute(pageId, bookId))
     }
@@ -218,5 +233,9 @@ class NotableNavigator(
 
     fun cleanCurrentPageId() {
         currentPageId = null
+    }
+
+    private companion object {
+        const val FIRST_PEN_DECIDED = "firstPenDecided"
     }
 }
