@@ -55,4 +55,26 @@ class AppSettingsToolbarLayoutTest {
         )
         assertEquals(settings.toolbarLayout, decoded.toolbarLayout)
     }
+
+    @Test
+    fun `page arrows are added to a saved layout once`() {
+        val saved = json.decodeFromString(
+            AppSettings.serializer(),
+            """{"version":1,"toolbarLayout":{"scrollable":[],"pinned":["PAGE_NAV","MENU"]}}""",
+        )
+        val upgraded = saved.withPageArrowsAdded()
+        assertEquals(listOf("PREV_PAGE", "PAGE_NAV", "NEXT_PAGE", "MENU"), upgraded.toolbarLayout?.pinned)
+        assertEquals(true, upgraded.toolbarPageArrowsAdded)
+
+        // Hidden again by the user afterwards: stays hidden.
+        val hidden = upgraded.copy(toolbarLayout = ToolbarLayout(emptyList(), listOf("PAGE_NAV", "MENU")))
+        assertEquals(hidden, hidden.withPageArrowsAdded())
+    }
+
+    @Test
+    fun `default layout needs no upgrade, only the flag`() {
+        val upgraded = AppSettings(version = 1).withPageArrowsAdded()
+        assertNull(upgraded.toolbarLayout)
+        assertEquals(true, upgraded.toolbarPageArrowsAdded)
+    }
 }

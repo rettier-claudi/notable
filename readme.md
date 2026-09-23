@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Page-turn arrows in the toolbar** (v0.2.6-claudi.20). Two new toolbar elements,
+  *Previous page* (`PREV_PAGE`) and *Next page* (`NEXT_PAGE`), shown in notebooks only. They turn
+  the page exactly like a page-turn key or a side swipe (through `EditorControlTower`, which also
+  clears the undo history), so *Next page* on the last page adds a new page, which is gone again
+  on close if nothing was written on it. The default layout has them either side of the page
+  number. A layout saved before claudi.20 gets them once at app start
+  (`AppSettings.withPageArrowsAdded`, flag `toolbarPageArrowsAdded`): either side of the page
+  number, or at the start of the pinned zone if the page number is hidden. They can be moved or
+  hidden in *Settings → Toolbar* like any other element, and stay hidden. Occasion: Philipp's
+  wish on 2026-09-23.
 - **Opening a page starts with the first pen** (v0.2.6-claudi.19). The editor used to come up
   with whatever tool was last in hand — the marker, the eraser, selection — carried over from the
   previous page. Entering a page from outside the editor (library, a folder, the pages overview)

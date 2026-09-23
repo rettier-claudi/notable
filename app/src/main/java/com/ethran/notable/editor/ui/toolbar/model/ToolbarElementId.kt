@@ -19,6 +19,9 @@ enum class ToolbarElementId {
     SHAPE, ERASER, SELECT, IMAGE, PASTE, RESET_VIEW,
     UNDO, REDO, PAGE_NAV, HOME, MENU,
 
+    /** Fork: page-turn arrows, the same as a page-turn key or a side swipe. */
+    PREV_PAGE, NEXT_PAGE,
+
     /** Sync status button: icon reflects the engine state, tap starts a sync. */
     SYNC,
 

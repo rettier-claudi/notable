@@ -165,4 +165,46 @@ class ToolbarLayoutTest {
         assertEquals("ball", layout.firstPen(pens)?.id)
         assertEquals(null, layout.firstPen(emptyList()))
     }
+
+    @Test
+    fun `page arrows go around the page number`() {
+        val layout = ToolbarLayout(
+            scrollable = listOf("PEN:ball"),
+            pinned = listOf("UNDO", "PAGE_NAV", "HOME", "MENU"),
+        )
+        assertEquals(
+            listOf("UNDO", "PREV_PAGE", "PAGE_NAV", "NEXT_PAGE", "HOME", "MENU"),
+            layout.withPageArrows().pinned,
+        )
+        assertEquals(layout.scrollable, layout.withPageArrows().scrollable)
+    }
+
+    @Test
+    fun `page arrows follow the page number into the scrollable zone`() {
+        val layout = ToolbarLayout(scrollable = listOf("PAGE_NAV", "ERASER"), pinned = listOf("MENU"))
+        assertEquals(
+            ToolbarLayout(
+                scrollable = listOf("PREV_PAGE", "PAGE_NAV", "NEXT_PAGE", "ERASER"),
+                pinned = listOf("MENU"),
+            ),
+            layout.withPageArrows(),
+        )
+    }
+
+    @Test
+    fun `page arrows lead the pinned zone when the page number is hidden`() {
+        val layout = ToolbarLayout(scrollable = listOf("ERASER"), pinned = listOf("UNDO", "MENU"))
+        assertEquals(listOf("PREV_PAGE", "NEXT_PAGE", "UNDO", "MENU"), layout.withPageArrows().pinned)
+    }
+
+    @Test
+    fun `a layout that already places an arrow is left alone`() {
+        val layout = ToolbarLayout(scrollable = listOf("NEXT_PAGE"), pinned = listOf("PAGE_NAV", "MENU"))
+        assertEquals(layout, layout.withPageArrows())
+    }
+
+    @Test
+    fun `default layout already has the page arrows`() {
+        assertEquals(ToolbarLayout.DEFAULT, ToolbarLayout.DEFAULT.withPageArrows())
+    }
 }

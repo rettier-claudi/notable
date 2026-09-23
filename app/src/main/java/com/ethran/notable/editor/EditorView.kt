@@ -164,6 +164,8 @@ fun EditorView(
                     CanvasCommand.Redo -> editorControlTower.redo()
                     CanvasCommand.Paste -> editorControlTower.pasteFromClipboard()
                     CanvasCommand.ResetView -> editorControlTower.resetZoomAndScroll()
+                    CanvasCommand.PreviousPage -> editorControlTower.goToPreviousPage()
+                    CanvasCommand.NextPage -> editorControlTower.goToNextPage()
                     CanvasCommand.ClearAllStrokes -> {
                         CanvasEventBus.clearPageSignal.emit(Unit)
                         snackManager.displaySnack(

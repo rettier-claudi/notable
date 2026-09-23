@@ -162,7 +162,12 @@ class MainActivity : ComponentActivity() {
                                 AppSettings(version = 1)
                             )
 
-                        GlobalAppSettings.update(savedSettings)
+                        // Fork: one-time upgrade, the page-turn arrows go into a saved toolbar layout.
+                        val settings = savedSettings.withPageArrowsAdded()
+                        if (settings != savedSettings) {
+                            kvProxy.get().setKv(APP_SETTINGS_KEY, settings, AppSettings.serializer())
+                        }
+                        GlobalAppSettings.update(settings)
                         strokeMigrationHelper.get().reencodeStrokePointsToBinary()
                         pageDataManager.get()
                             .registerComponentCallbacks(this@MainActivity.applicationContext)

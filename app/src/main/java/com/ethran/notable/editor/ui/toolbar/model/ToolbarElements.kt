@@ -9,6 +9,8 @@ import com.ethran.notable.editor.state.Shape
 import com.ethran.notable.editor.utils.Eraser
 import com.ethran.notable.editor.utils.Pen
 import compose.icons.FeatherIcons
+import compose.icons.feathericons.ChevronLeft
+import compose.icons.feathericons.ChevronRight
 import compose.icons.feathericons.Clipboard
 import compose.icons.feathericons.EyeOff
 import compose.icons.feathericons.RefreshCcw
@@ -90,6 +92,22 @@ object ToolbarElements {
             contentDescription = "page navigation",
             visibleWhen = { state, _ -> state.notebookId != null },
             kind = CustomKind.PAGE_NAV,
+        ),
+        // Fork: "next" on the last page adds a page, like the page-turn keys; an empty one is
+        // gone again when the notebook closes (UnwrittenPages).
+        ActionElement(
+            id = ToolbarElementId.PREV_PAGE,
+            icon = IconRef.Vector(FeatherIcons.ChevronLeft),
+            contentDescription = "previous page",
+            visibleWhen = { state, _ -> state.notebookId != null },
+            action = ToolbarAction.PreviousPage,
+        ),
+        ActionElement(
+            id = ToolbarElementId.NEXT_PAGE,
+            icon = IconRef.Vector(FeatherIcons.ChevronRight),
+            contentDescription = "next page",
+            visibleWhen = { state, _ -> state.notebookId != null },
+            action = ToolbarAction.NextPage,
         ),
         ActionElement(
             id = ToolbarElementId.HOME,

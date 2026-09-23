@@ -58,6 +58,8 @@ data class AppSettings(
     // User-created pen instances; layouts reference them as "PEN:<id>". The preset is the
     // single source of truth for a pen's color/size — StrokeMenu edits write back here.
     val toolbarPens: List<ToolbarPen> = ToolbarPen.DEFAULT_PENS,
+    // Fork: the page-turn arrows were put into the saved layout (ToolbarLayout.withPageArrows).
+    val toolbarPageArrowsAdded: Boolean = false,
 
     // Gestures
     val doubleTapAction: GestureAction = GestureAction.Undo,
@@ -104,6 +106,11 @@ data class AppSettings(
         /** "Sync and notify", the toolbar's send button: sync, notify, lock/mark, home. */
         Send,
     }
+
+    /** Fork: settings with the page-turn arrows put into the saved toolbar layout, once. */
+    fun withPageArrowsAdded(): AppSettings =
+        if (toolbarPageArrowsAdded) this
+        else copy(toolbarLayout = toolbarLayout?.withPageArrows(), toolbarPageArrowsAdded = true)
 
     /** A pinch zooms along with the fingers (continuous zoom on, zoom not disabled). */
     val pinchZoomsContinuously: Boolean

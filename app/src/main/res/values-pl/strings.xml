@@ -280,6 +280,8 @@
     <string name="toolbar_element_undo">Cofnij</string>
     <string name="toolbar_element_redo">Ponów</string>
     <string name="toolbar_element_page_nav">Numer strony</string>
+    <string name="toolbar_element_prev_page">Poprzednia strona</string>
+    <string name="toolbar_element_next_page">Następna strona</string>
     <string name="toolbar_element_home">Biblioteka</string>
     <string name="toolbar_element_menu">Menu</string>
     <string name="toolbar_element_divider">Separator</string>

@@ -69,6 +69,28 @@ data class ToolbarLayout(
             .firstOrNull()
             ?: pens.firstOrNull()
 
+    /**
+     * Fork: puts the page-turn arrows (claudi.20) into a layout saved before they existed —
+     * around the page number, or at the start of the pinned zone if the page number is hidden.
+     * A layout that already places either arrow is left alone. Runs once per install
+     * ([com.ethran.notable.data.datastore.AppSettings.toolbarPageArrowsAdded]), so arrows the
+     * user hides afterwards stay hidden.
+     */
+    fun withPageArrows(): ToolbarLayout {
+        val prev = ToolbarElementId.PREV_PAGE.name
+        val next = ToolbarElementId.NEXT_PAGE.name
+        if (prev in scrollable || prev in pinned || next in scrollable || next in pinned) return this
+
+        fun List<String>.around(): List<String> = flatMap {
+            if (it == ToolbarElementId.PAGE_NAV.name) listOf(prev, it, next) else listOf(it)
+        }
+        return when (ToolbarElementId.PAGE_NAV.name) {
+            in scrollable -> copy(scrollable = scrollable.around())
+            in pinned -> copy(pinned = pinned.around())
+            else -> copy(pinned = listOf(prev, next) + pinned)
+        }
+    }
+
     companion object {
         /** References the stable seed ids of [ToolbarPen.DEFAULT_PENS]. */
         val DEFAULT = ToolbarLayout(
@@ -78,7 +100,8 @@ data class ToolbarLayout(
                 "DIVIDER", "SELECT", "DIVIDER", "IMAGE", "DIVIDER", "PASTE", "RESET_VIEW",
             ),
             pinned = listOf(
-                "DIVIDER", "UNDO", "REDO", "DIVIDER", "PAGE_NAV", "HOME", "DIVIDER",
+                "DIVIDER", "UNDO", "REDO", "DIVIDER", "PREV_PAGE", "PAGE_NAV", "NEXT_PAGE", "HOME",
+                "DIVIDER",
                 "SYNC", "SYNC_NOTIFY", "DIVIDER", "MENU",
             ),
         )

@@ -168,6 +168,8 @@ sealed class ToolbarAction {
     object NavigateToLibrary : ToolbarAction()
     object NavigateToBugReport : ToolbarAction()
     object NavigateToPages : ToolbarAction()
+    object PreviousPage : ToolbarAction()
+    object NextPage : ToolbarAction()
     object NavigateToHome : ToolbarAction()
     object SyncNow : ToolbarAction()
     object CancelSync : ToolbarAction()
@@ -192,6 +194,8 @@ sealed class CanvasCommand {
     object Paste : CanvasCommand()
     object ResetView : CanvasCommand()
     object ClearAllStrokes : CanvasCommand()
+    object PreviousPage : CanvasCommand()
+    object NextPage : CanvasCommand()
     object RefreshCanvas : CanvasCommand()
     data class CopyImageToCanvas(val uri: Uri) : CanvasCommand()
 }
@@ -490,6 +494,9 @@ class EditorViewModel @Inject constructor(
             ToolbarAction.NavigateToLibrary -> handleNavigateToLibrary()
             ToolbarAction.NavigateToBugReport -> sendUiEvent(EditorUiEvent.NavigateToBugReport)
             ToolbarAction.NavigateToPages -> handleNavigateToPages()
+            // Through the control tower like the page-turn keys: it also clears undo history.
+            ToolbarAction.PreviousPage -> sendCanvasCommand(CanvasCommand.PreviousPage)
+            ToolbarAction.NextPage -> sendCanvasCommand(CanvasCommand.NextPage)
             ToolbarAction.NavigateToHome -> sendUiEvent(EditorUiEvent.LeaveToPreviousFolder)
             ToolbarAction.SyncNow -> {
                 // Named so the round covers this notebook whatever folder it is in (SyncScope).
