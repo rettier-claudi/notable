@@ -261,7 +261,6 @@
     <string name="toolbar_settings_edit_pen">Edytuj pisak</string>
     <string name="toolbar_settings_delete">Usuń</string>
     <string name="toolbar_settings_hide">Ukryj</string>
-    <string name="toolbar_settings_menu_locked">Przycisku menu nie można ukryć — to jedyny sposób na otwarcie menu paska narzędzi</string>
     <string name="toolbar_settings_size">Rozmiar</string>
     <string name="toolbar_settings_color">Kolor</string>
 
@@ -282,6 +281,10 @@
     <string name="toolbar_element_page_nav">Numer strony</string>
     <string name="toolbar_element_prev_page">Poprzednia strona</string>
     <string name="toolbar_element_next_page">Następna strona</string>
+    <string name="toolbar_element_light">Podświetlenie</string>
+    <string name="front_light_toggle">Podświetlenie wł./wył.</string>
+    <string name="front_light_still_on">Podświetlenie nadal świeci — urządzenie zignorowało przełącznik</string>
+    <string name="front_light_still_off">Podświetlenie pozostaje wyłączone — jasność jest na zero, zwiększ ją w centrum sterowania Boox</string>
     <string name="toolbar_element_home">Biblioteka</string>
     <string name="toolbar_element_menu">Menu</string>
     <string name="toolbar_element_divider">Separator</string>

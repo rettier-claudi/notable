@@ -16,6 +16,7 @@ import compose.icons.feathericons.EyeOff
 import compose.icons.feathericons.RefreshCcw
 import compose.icons.feathericons.RefreshCw
 import compose.icons.feathericons.Send
+import compose.icons.feathericons.Sun
 
 /**
  * The registry: every placeable **static** toolbar element, keyed by id. Pen buttons are
@@ -128,6 +129,13 @@ object ToolbarElements {
             contentDescription = "sync and notify",
             visibleWhen = { state, _ -> state.syncEnabled && state.syncWebhookConfigured },
             kind = CustomKind.SYNC_NOTIFY,
+        ),
+        // Fork: its icon follows the light (sun on, moon off), so it renders custom.
+        CustomElement(
+            id = ToolbarElementId.LIGHT,
+            icon = IconRef.Vector(FeatherIcons.Sun),
+            contentDescription = "front light",
+            kind = CustomKind.LIGHT,
         ),
         CustomElement(
             id = ToolbarElementId.MENU,

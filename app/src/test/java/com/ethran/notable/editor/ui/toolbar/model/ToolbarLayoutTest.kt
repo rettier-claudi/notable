@@ -84,12 +84,12 @@ class ToolbarLayoutTest {
     }
 
     @Test
-    fun `validator appends menu to pinned when missing`() {
+    fun `validator leaves a hidden menu hidden`() {
         val layout = ToolbarLayout(
             scrollable = listOf("PEN:ball"),
             pinned = listOf("UNDO"),
         ).validated(pens)
-        assertEquals(listOf("UNDO", "MENU"), layout.pinned)
+        assertEquals(listOf("UNDO"), layout.pinned)
     }
 
     @Test
@@ -206,5 +206,40 @@ class ToolbarLayoutTest {
     @Test
     fun `default layout already has the page arrows`() {
         assertEquals(ToolbarLayout.DEFAULT, ToolbarLayout.DEFAULT.withPageArrows())
+    }
+
+    @Test
+    fun `front light goes right before the menu`() {
+        val layout = ToolbarLayout(
+            scrollable = listOf("PEN:ball"),
+            pinned = listOf("UNDO", "SYNC", "DIVIDER", "MENU"),
+        )
+        assertEquals(
+            ToolbarLayout(
+                scrollable = listOf("PEN:ball"),
+                pinned = listOf("UNDO", "SYNC", "DIVIDER", "LIGHT", "MENU"),
+            ),
+            layout.withFrontLight(),
+        )
+    }
+
+    @Test
+    fun `front light follows the menu into the scrollable zone`() {
+        val layout = ToolbarLayout(scrollable = listOf("ERASER", "MENU"), pinned = listOf("UNDO"))
+        assertEquals(listOf("ERASER", "LIGHT", "MENU"), layout.withFrontLight().scrollable)
+        assertEquals(listOf("UNDO"), layout.withFrontLight().pinned)
+    }
+
+    @Test
+    fun `front light ends the pinned zone when the menu is hidden`() {
+        val layout = ToolbarLayout(scrollable = listOf("ERASER"), pinned = listOf("UNDO", "HOME"))
+        assertEquals(listOf("UNDO", "HOME", "LIGHT"), layout.withFrontLight().pinned)
+    }
+
+    @Test
+    fun `a layout that already places the front light is left alone`() {
+        val layout = ToolbarLayout(scrollable = listOf("LIGHT"), pinned = listOf("MENU"))
+        assertEquals(layout, layout.withFrontLight())
+        assertEquals(ToolbarLayout.DEFAULT, ToolbarLayout.DEFAULT.withFrontLight())
     }
 }

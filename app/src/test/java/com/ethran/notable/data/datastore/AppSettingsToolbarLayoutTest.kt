@@ -72,9 +72,28 @@ class AppSettingsToolbarLayoutTest {
     }
 
     @Test
+    fun `front light is added to a saved layout once`() {
+        val saved = json.decodeFromString(
+            AppSettings.serializer(),
+            """{"version":1,"toolbarLayout":{"scrollable":[],"pinned":["UNDO","MENU"]}}""",
+        )
+        val upgraded = saved.withPageArrowsAdded().withFrontLightAdded()
+        assertEquals(
+            listOf("PREV_PAGE", "NEXT_PAGE", "UNDO", "LIGHT", "MENU"),
+            upgraded.toolbarLayout?.pinned,
+        )
+        assertEquals(true, upgraded.toolbarLightAdded)
+
+        // Hidden again by the user afterwards: stays hidden.
+        val hidden = upgraded.copy(toolbarLayout = ToolbarLayout(emptyList(), listOf("UNDO")))
+        assertEquals(hidden, hidden.withFrontLightAdded())
+    }
+
+    @Test
     fun `default layout needs no upgrade, only the flag`() {
-        val upgraded = AppSettings(version = 1).withPageArrowsAdded()
+        val upgraded = AppSettings(version = 1).withPageArrowsAdded().withFrontLightAdded()
         assertNull(upgraded.toolbarLayout)
         assertEquals(true, upgraded.toolbarPageArrowsAdded)
+        assertEquals(true, upgraded.toolbarLightAdded)
     }
 }

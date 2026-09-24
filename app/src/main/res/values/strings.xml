@@ -288,7 +288,6 @@
     <string name="toolbar_settings_edit_pen">Edit pen</string>
     <string name="toolbar_settings_delete">Delete</string>
     <string name="toolbar_settings_hide">Hide</string>
-    <string name="toolbar_settings_menu_locked">The menu button can\'t be hidden — it\'s the only way to open the toolbar menu</string>
     <string name="toolbar_settings_size">Size</string>
     <string name="toolbar_settings_color">Color</string>
 
@@ -312,6 +311,10 @@
     <string name="toolbar_element_page_nav">Page number</string>
     <string name="toolbar_element_prev_page">Previous page</string>
     <string name="toolbar_element_next_page">Next page</string>
+    <string name="toolbar_element_light">Front light</string>
+    <string name="front_light_toggle">Front light on/off</string>
+    <string name="front_light_still_on">The front light stayed on — the device ignored the switch</string>
+    <string name="front_light_still_off">The front light stays dark — its brightness is at zero, raise it in the Boox control center</string>
     <string name="toolbar_element_home">Library</string>
     <string name="toolbar_element_menu">Menu</string>
     <string name="toolbar_element_divider">Divider</string>

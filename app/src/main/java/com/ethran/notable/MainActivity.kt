@@ -162,8 +162,8 @@ class MainActivity : ComponentActivity() {
                                 AppSettings(version = 1)
                             )
 
-                        // Fork: one-time upgrade, the page-turn arrows go into a saved toolbar layout.
-                        val settings = savedSettings.withPageArrowsAdded()
+                        // Fork: one-time upgrades, new toolbar elements go into a saved layout.
+                        val settings = savedSettings.withPageArrowsAdded().withFrontLightAdded()
                         if (settings != savedSettings) {
                             kvProxy.get().setKv(APP_SETTINGS_KEY, settings, AppSettings.serializer())
                         }

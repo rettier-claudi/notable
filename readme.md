@@ -60,6 +60,23 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Front light on/off, and a hideable menu** (v0.2.6-claudi.21). A sun/moon button switches
+  the Boox front light: on the home screen next to the settings gear, and in the editor as the
+  toolbar element *Front light* (`LIGHT`). Sun = light on, moon = off. It talks to the firmware
+  the way the Onyx SDK and KOReader do, by reflection on `android.onyx.hardware.DeviceController`
+  (`utils/FrontLight.kt`): off closes the light's switch (the CTM master switch 4 on newer
+  devices, 1 on single-light ones, 2 and 3 on warm/cold ones), so the firmware keeps brightness
+  and warmth and the Boox control center shows the same state. If the firmware ignores the
+  switch, off dims the level to zero instead and remembers it (SharedPreferences `front_light`),
+  and on puts it back. The state is read again whenever the window regains focus, so a change
+  made in the control center shows once it closes. A snack says so when a tap changed nothing
+  (light ignored the switch, or its brightness is at zero). Devices without a controllable light
+  show no button. A layout saved before claudi.21 gets the element once at app start, right
+  before the menu (`AppSettings.withFrontLightAdded`, flag `toolbarLightAdded`). The toolbar
+  menu (☰) can now be hidden in *Settings → Toolbar* like any other element; upstream refused
+  the drag and the layout validator put it back. With it hidden, its entries (library, export,
+  clear page, background, bug report) are not reachable from the editor until it is shown again.
+  Occasion: Philipp's wish on 2026-09-24. Untested on the device at release.
 - **Page-turn arrows in the toolbar** (v0.2.6-claudi.20). Two new toolbar elements,
   *Previous page* (`PREV_PAGE`) and *Next page* (`NEXT_PAGE`), shown in notebooks only. They turn
   the page exactly like a page-turn key or a side swipe (through `EditorControlTower`, which also

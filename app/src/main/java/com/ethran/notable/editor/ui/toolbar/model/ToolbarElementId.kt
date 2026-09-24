@@ -22,6 +22,9 @@ enum class ToolbarElementId {
     /** Fork: page-turn arrows, the same as a page-turn key or a side swipe. */
     PREV_PAGE, NEXT_PAGE,
 
+    /** Fork: front light on/off (Boox firmware switch); not shown on devices without one. */
+    LIGHT,
+
     /** Sync status button: icon reflects the engine state, tap starts a sync. */
     SYNC,
 

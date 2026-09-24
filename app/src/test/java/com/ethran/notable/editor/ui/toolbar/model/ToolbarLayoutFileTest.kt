@@ -65,6 +65,14 @@ class ToolbarLayoutFileTest {
     }
 
     @Test
+    fun `a layout with the menu hidden imports with the menu hidden, nothing dropped`() {
+        val layout = ToolbarLayout(scrollable = listOf("PEN:ball"), pinned = listOf("UNDO", "LIGHT"))
+        val result = ToolbarLayoutFile.decode(ToolbarLayoutFile.encode(layout, pens))
+        assertEquals(layout, result.layout)
+        assertEquals(0, result.droppedCount)
+    }
+
+    @Test
     fun `empty pen option lists fall back to defaults`() {
         val pen = ToolbarPen(
             "p", Pen.BALLPEN, AndroidColor.BLACK, 5f,
@@ -120,13 +128,5 @@ class ToolbarLayoutFileTest {
         assertEquals(listOf("PEN:ball", "ERASER"), result.layout.scrollable)
         assertEquals(listOf("MENU"), result.layout.pinned)
         assertEquals(2, result.droppedCount)
-    }
-
-    @Test
-    fun `missing MENU is appended without inflating the dropped count`() {
-        val layout = ToolbarLayout(scrollable = listOf("PEN:ball"), pinned = emptyList())
-        val result = ToolbarLayoutFile.decode(ToolbarLayoutFile.encode(layout, pens))
-        assertEquals(listOf("MENU"), result.layout.pinned)
-        assertEquals(0, result.droppedCount)
     }
 }

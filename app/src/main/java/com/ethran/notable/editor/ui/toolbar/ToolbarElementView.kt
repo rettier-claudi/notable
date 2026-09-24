@@ -49,7 +49,11 @@ import com.ethran.notable.editor.ui.toolbar.model.PenElement
 import com.ethran.notable.editor.ui.toolbar.model.ShapeElement
 import com.ethran.notable.editor.ui.toolbar.model.ToolbarElement
 import com.ethran.notable.editor.utils.Eraser
+import com.ethran.notable.ui.components.frontLightIcon
+import com.ethran.notable.ui.components.rememberFrontLightState
+import com.ethran.notable.ui.components.rememberFrontLightToggle
 import com.ethran.notable.ui.convertDpToPixel
+import com.ethran.notable.utils.FrontLightState
 import com.ethran.notable.sync.SyncState
 import com.ethran.notable.ui.noRippleClickable
 import compose.icons.FeatherIcons
@@ -155,6 +159,18 @@ fun ToolbarElementView(
                     vectorIcon = (element.icon as? IconRef.Vector)?.imageVector,
                     contentDescription = element.contentDescription,
                 )
+
+            CustomKind.LIGHT -> {
+                // Nothing to switch on devices without a controllable front light.
+                val lightState = rememberFrontLightState()
+                if (lightState != FrontLightState.UNSUPPORTED) {
+                    ToolbarButton(
+                        onSelect = rememberFrontLightToggle(),
+                        vectorIcon = frontLightIcon(lightState),
+                        contentDescription = element.contentDescription,
+                    )
+                }
+            }
 
             CustomKind.MENU ->
                 Column {

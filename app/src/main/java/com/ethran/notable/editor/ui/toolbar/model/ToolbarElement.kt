@@ -120,7 +120,7 @@ data class CustomElement(
 ) : ToolbarElement
 
 enum class CustomKind {
-    PAGE_NAV, MENU, IMAGE_PICKER, SYNC, SYNC_NOTIFY
+    PAGE_NAV, MENU, IMAGE_PICKER, SYNC, SYNC_NOTIFY, LIGHT
 }
 
 /** Placeable vertical divider — lets users control grouping with the ordering mechanism. */

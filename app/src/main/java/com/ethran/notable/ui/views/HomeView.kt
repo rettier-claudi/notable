@@ -66,6 +66,9 @@ import com.ethran.notable.ui.components.CornerBadges
 import com.ethran.notable.ui.components.NotebookCard
 import com.ethran.notable.ui.components.PagePreview
 import com.ethran.notable.ui.components.ShowPagesRow
+import com.ethran.notable.ui.components.frontLightIcon
+import com.ethran.notable.ui.components.rememberFrontLightState
+import com.ethran.notable.ui.components.rememberFrontLightToggle
 import com.ethran.notable.ui.dialogs.ConflictResolutionDialog
 import com.ethran.notable.ui.dialogs.EmptyBookWarningHandler
 import com.ethran.notable.ui.dialogs.FolderConfigDialog
@@ -74,6 +77,7 @@ import com.ethran.notable.ui.dialogs.PdfImportChoiceDialog
 import com.ethran.notable.ui.noRippleClickable
 import com.ethran.notable.ui.viewmodels.LibraryUiState
 import com.ethran.notable.ui.viewmodels.LibraryViewModel
+import com.ethran.notable.utils.FrontLightState
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertTriangle
 import compose.icons.feathericons.Check
@@ -207,6 +211,15 @@ fun LibraryContent(
                 )
                 ImportFileButton(onImportPdf = onImportPdf, onImportXopp = onImportXopp)
                 SyncStatusChip(status = syncStatus, onSyncNow = onSyncNow, onCancelSync = onCancelSync)
+                // Fork: front light on/off next to the settings gear; absent without a light.
+                val lightState = rememberFrontLightState()
+                if (lightState != FrontLightState.UNSUPPORTED) {
+                    TopIconButton(
+                        icon = frontLightIcon(lightState),
+                        contentDescription = stringResource(R.string.front_light_toggle),
+                        onClick = rememberFrontLightToggle(),
+                    )
+                }
                 BadgedBox(
                     badge = {
                         if (!uiState.isLatestVersion) Badge(

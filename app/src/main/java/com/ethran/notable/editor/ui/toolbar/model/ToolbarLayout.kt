@@ -27,11 +27,10 @@ data class ToolbarLayout(
      * - drops [ToolbarElementId.TOGGLE] (structural, always rendered first) and the bare
      *   [ToolbarElementId.PEN] sentinel (pens are only placeable as `"PEN:<id>"`);
      * - drops duplicates across both zones (first occurrence wins), except
-     *   [ToolbarElementId.DIVIDER], which may repeat freely;
-     * - enforces the single invariant: [ToolbarElementId.MENU] must be present somewhere;
-     *   if missing, it is appended to [pinned].
+     *   [ToolbarElementId.DIVIDER], which may repeat freely.
      *
      * Everything else — including hiding elements by omission — is the user's business.
+     * Fork: that includes [ToolbarElementId.MENU]; upstream appended it when missing.
      */
     fun validated(pens: List<ToolbarPen>): ToolbarLayout {
         val seen = mutableSetOf<String>()
@@ -49,12 +48,7 @@ data class ToolbarLayout(
             id.name
         }
 
-        val cleanScrollable = sanitize(scrollable)
-        var cleanPinned = sanitize(pinned)
-        if (ToolbarElementId.MENU.name !in seen) {
-            cleanPinned = cleanPinned + ToolbarElementId.MENU.name
-        }
-        return ToolbarLayout(cleanScrollable, cleanPinned)
+        return ToolbarLayout(sanitize(scrollable), sanitize(pinned))
     }
 
     /**
@@ -91,6 +85,26 @@ data class ToolbarLayout(
         }
     }
 
+    /**
+     * Fork: puts the front-light switch (claudi.21) into a layout saved before it existed —
+     * right before the menu, or at the end of the pinned zone if the menu is hidden. Left alone
+     * if the layout already places it. Runs once per install
+     * ([com.ethran.notable.data.datastore.AppSettings.toolbarLightAdded]), so hiding it sticks.
+     */
+    fun withFrontLight(): ToolbarLayout {
+        val light = ToolbarElementId.LIGHT.name
+        if (light in scrollable || light in pinned) return this
+
+        fun List<String>.beforeMenu(): List<String> = flatMap {
+            if (it == ToolbarElementId.MENU.name) listOf(light, it) else listOf(it)
+        }
+        return when (ToolbarElementId.MENU.name) {
+            in scrollable -> copy(scrollable = scrollable.beforeMenu())
+            in pinned -> copy(pinned = pinned.beforeMenu())
+            else -> copy(pinned = pinned + light)
+        }
+    }
+
     companion object {
         /** References the stable seed ids of [ToolbarPen.DEFAULT_PENS]. */
         val DEFAULT = ToolbarLayout(
@@ -102,7 +116,7 @@ data class ToolbarLayout(
             pinned = listOf(
                 "DIVIDER", "UNDO", "REDO", "DIVIDER", "PREV_PAGE", "PAGE_NAV", "NEXT_PAGE", "HOME",
                 "DIVIDER",
-                "SYNC", "SYNC_NOTIFY", "DIVIDER", "MENU",
+                "SYNC", "SYNC_NOTIFY", "DIVIDER", "LIGHT", "MENU",
             ),
         )
     }

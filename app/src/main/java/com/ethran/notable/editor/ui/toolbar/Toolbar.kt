@@ -91,8 +91,8 @@ fun ToolbarContent(
 
     // Snapshot read: setting changes (toolbarPens, toolbarPosition, …) recompose the toolbar.
     val settings = GlobalAppSettings.current
-    // Persisted layouts must be sanitized: they may predate elements, duplicate ids,
-    // or omit the mandatory MENU entry. DEFAULT is validated by construction (tested);
+    // Persisted layouts must be sanitized: they may predate elements or duplicate ids.
+    // DEFAULT is validated by construction (tested);
     // its entries for deleted presets are skipped by resolve() below.
     val layout = remember(settings.toolbarLayout, settings.toolbarPens) {
         settings.toolbarLayout?.validated(settings.toolbarPens) ?: ToolbarLayout.DEFAULT

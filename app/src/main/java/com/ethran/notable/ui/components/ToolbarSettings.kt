@@ -383,26 +383,13 @@ private fun ReorderableElementList(
     var edgeScrollDir by remember { mutableIntStateOf(0) }
     var columnCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    val snackState = LocalSnackContext.current
-    val menuLockedMsg = stringResource(R.string.toolbar_settings_menu_locked)
-    // Fixed id: repeated attempts refresh the one snack instead of stacking copies.
-    fun menuLockedSnack() = snackState.showOrUpdateSnack(
-        SnackConf(id = "toolbar-menu-locked", text = menuLockedMsg, duration = 3000)
-    )
-
-    /** One-slot move of the dragged row; false when blocked (list end, or MENU into
-     * Hidden — the validator would silently snap it back, so refuse the drop instead). */
+    /** One-slot move of the dragged row; false when blocked at the list end. */
     fun moveDragged(step: Int): Boolean {
         val from = draggingIndex ?: return false
         val to = from + step
         // Row 0 is the Scrollable header; nothing may move above it.
         if (to < 1 || to > rows.lastIndex) return false
         val moved = rows.toMutableList().apply { add(to, removeAt(from)) }
-        val entry = (moved[to] as? ToolbarRow.Element)?.entry
-        if (entry == ToolbarElementId.MENU.name && zoneAt(moved, to) == Zone.HIDDEN) {
-            menuLockedSnack()
-            return false
-        }
         rows = moved
         draggingIndex = to
         dragOffset -= step * rowHeightPx
@@ -481,10 +468,9 @@ private fun ReorderableElementList(
                 is ToolbarRow.Element -> {
                     val isDragged = index == draggingIndex
                     // Hidden = dropped from the layout. Not offered for rows already in
-                    // Hidden, for MENU (locked, see menuLockedSnack), or for dividers
-                    // (hiding one equals deleting it — they have the delete button).
+                    // Hidden, or for dividers (hiding one equals deleting it — they have the
+                    // delete button). Fork: the menu can be hidden like anything else.
                     val hidable = zoneAt(rows, index) != Zone.HIDDEN &&
-                            row.entry != ToolbarElementId.MENU.name &&
                             row.entry != ToolbarElementId.DIVIDER.name
                     ElementRow(
                         entry = row.entry,
@@ -981,6 +967,7 @@ private fun elementNameRes(id: ToolbarElementId): Int = when (id) {
     ToolbarElementId.PAGE_NAV -> R.string.toolbar_element_page_nav
     ToolbarElementId.PREV_PAGE -> R.string.toolbar_element_prev_page
     ToolbarElementId.NEXT_PAGE -> R.string.toolbar_element_next_page
+    ToolbarElementId.LIGHT -> R.string.toolbar_element_light
     ToolbarElementId.HOME -> R.string.toolbar_element_home
     ToolbarElementId.MENU -> R.string.toolbar_element_menu
     ToolbarElementId.SYNC -> R.string.toolbar_element_sync

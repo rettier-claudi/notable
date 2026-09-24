@@ -68,8 +68,7 @@ data class ToolbarLayoutFile(
             val droppedPens = file.pens.size - pens.size
             val validated = file.layout.validated(pens)
             val original = file.layout.scrollable + file.layout.pinned
-            val kept = validated.scrollable.size + validated.pinned.size -
-                    if (ToolbarElementId.MENU.name in original) 0 else 1 // validator appends MENU
+            val kept = validated.scrollable.size + validated.pinned.size
             return ImportResult(validated, pens, original.size - kept + droppedPens)
         }
     }

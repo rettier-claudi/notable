@@ -53,13 +53,15 @@ data class AppSettings(
     val paginatePdf: Boolean = true,
     val visualizePdfPagination: Boolean = false,
     // null → ToolbarLayout.DEFAULT. Sanitize with ToolbarLayout.validated() when reading:
-    // persisted layouts may predate elements or omit the mandatory MENU entry.
+    // persisted layouts may predate elements or name ones this version lacks.
     val toolbarLayout: ToolbarLayout? = null,
     // User-created pen instances; layouts reference them as "PEN:<id>". The preset is the
     // single source of truth for a pen's color/size — StrokeMenu edits write back here.
     val toolbarPens: List<ToolbarPen> = ToolbarPen.DEFAULT_PENS,
     // Fork: the page-turn arrows were put into the saved layout (ToolbarLayout.withPageArrows).
     val toolbarPageArrowsAdded: Boolean = false,
+    // Fork: the front-light switch was put into the saved layout (ToolbarLayout.withFrontLight).
+    val toolbarLightAdded: Boolean = false,
 
     // Gestures
     val doubleTapAction: GestureAction = GestureAction.Undo,
@@ -111,6 +113,11 @@ data class AppSettings(
     fun withPageArrowsAdded(): AppSettings =
         if (toolbarPageArrowsAdded) this
         else copy(toolbarLayout = toolbarLayout?.withPageArrows(), toolbarPageArrowsAdded = true)
+
+    /** Fork: settings with the front-light switch put into the saved toolbar layout, once. */
+    fun withFrontLightAdded(): AppSettings =
+        if (toolbarLightAdded) this
+        else copy(toolbarLayout = toolbarLayout?.withFrontLight(), toolbarLightAdded = true)
 
     /** A pinch zooms along with the fingers (continuous zoom on, zoom not disabled). */
     val pinchZoomsContinuously: Boolean
