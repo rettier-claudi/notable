@@ -14,6 +14,7 @@ import com.ethran.notable.data.model.SimplePointF
 import com.ethran.notable.editor.PageView
 import com.ethran.notable.editor.canvas.CanvasEventBus
 import com.ethran.notable.editor.drawing.drawImage
+import com.ethran.notable.editor.drawing.inDrawingOrder
 import com.ethran.notable.editor.drawing.StrokeRenderers
 import com.ethran.notable.editor.state.PlacementMode
 import com.ethran.notable.ui.SnackConf
@@ -110,7 +111,7 @@ fun selectImagesAndStrokes(
             -pageBounds.takeTopLeftCornel().toOffset()
         )
     }
-    strokesToSelect.forEach {
+    inDrawingOrder(strokesToSelect).forEach {
         StrokeRenderers.current.drawStroke(
             selectedCanvas,
             it,

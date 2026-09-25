@@ -60,6 +60,13 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Highlighter always underneath** (v0.2.6-claudi.22). Marker strokes are drawn before every
+  other pen, so highlighting over existing writing no longer covers it. Each group keeps its own
+  order; only the drawing order changes, the stored stroke list stays as written
+  (`editor/drawing/StrokeOrder.kt`, `inDrawingOrder`). Applies to the page, thumbnails and PDF
+  export (`PageContentRenderer`), the selection bitmap and Xournal++ export. While the pen is
+  still down the Boox raw-drawing layer shows the marker on top; the page redraws it underneath
+  when the stroke ends.
 - **Front light on/off, and a hideable menu** (v0.2.6-claudi.21). A sun/moon button switches
   the Boox front light: on the home screen next to the settings gear, and in the editor as the
   toolbar element *Front light* (`LIGHT`). Sun = light on, moon = off. It talks to the firmware

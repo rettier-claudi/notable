@@ -23,6 +23,7 @@ import com.ethran.notable.data.db.StrokePoint
 import com.ethran.notable.data.ensureImagesFolder
 import com.ethran.notable.data.events.AppEvent
 import com.ethran.notable.data.events.AppEventBus
+import com.ethran.notable.editor.drawing.inDrawingOrder
 import com.ethran.notable.editor.utils.Pen
 import com.ethran.notable.utils.ensureNotMainThread
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -154,7 +155,7 @@ class XoppFile @Inject constructor(
             writer.write("<background type=\"solid\" color=\"#ffffffff\" style=\"plain\"/>\n")
             writer.write("<layer>\n")
 
-            for (stroke in strokes) {
+            for (stroke in inDrawingOrder(strokes)) {
                 if (stroke.points.size < 3) continue
 
                 writer.write("<stroke tool=\"")
