@@ -1,5 +1,6 @@
 package com.ethran.notable.editor.drawing
 
+import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -81,6 +82,14 @@ fun drawEraserStroke(canvas: Canvas, points: List<StrokePoint>, strokeSize: Floa
 }
 
 
+/**
+ * Fork: highlighter ink. The band is an opaque colour halfway between the pen colour and white
+ * (the same shade the Onyx wrapper's 50 % alpha gave on white paper), painted with
+ * [BlendMode.DARKEN]: each pixel keeps the darker of band and page. White paper turns the band
+ * colour, black text — handwriting as well as the machine text in bridge images — stays fully
+ * black instead of being washed to grey. Self-overlap of one stroke doesn't darken (min of equal
+ * colours), so no offscreen layer is needed.
+ */
 fun drawMarkerStroke(
     canvas: Canvas, paint: Paint, strokeSize: Float, points: List<StrokePoint>
 ) {
@@ -90,8 +99,8 @@ fun drawMarkerStroke(
         this.strokeCap = Paint.Cap.ROUND
         this.strokeJoin = Paint.Join.ROUND
         this.isAntiAlias = true
-        this.alpha = 100
-
+        this.color = markerInkColor(paint.color)
+        this.blendMode = BlendMode.DARKEN
     }
 
     val path = pointsToPath(points.map { SimplePointF(it.x, it.y) })

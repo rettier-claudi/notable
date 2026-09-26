@@ -16,7 +16,14 @@ import io.shipbook.shipbooksdk.Log
 
 enum class Eraser(val _name: String) {
     PEN("PEN"), SELECT("SELECT"),
+
+    /** Fork: drags like [PEN] but only takes highlighter strokes; writing stays. */
+    MARKER("MARKER"),
 }
+
+/** The strokes [eraser] may take at all; the swath or lasso then picks among them. */
+fun erasableStrokes(strokes: List<Stroke>, eraser: Eraser): List<Stroke> =
+    if (eraser == Eraser.MARKER) strokes.filter { it.pen == Pen.MARKER } else strokes
 
 // Fork: 300 ms (upstream 150). A short lift between letters must not start a scribble.
 const val SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS = 300L
@@ -120,11 +127,11 @@ fun handleErase(
     }
 
 
-    if (eraser == Eraser.PEN) {
+    if (eraser == Eraser.PEN || eraser == Eraser.MARKER) {
         paint.getFillPath(path, outPath)
     }
 
-    val deletedStrokes = selectStrokesFromPath(page.strokes, outPath)
+    val deletedStrokes = selectStrokesFromPath(erasableStrokes(page.strokes, eraser), outPath)
 
     val deletedStrokeIds = deletedStrokes.map { it.id }
 

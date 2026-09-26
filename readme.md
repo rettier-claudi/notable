@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Highlighter lets black through, and its own eraser** (v0.2.6-claudi.23). The marker band is
+  no longer the Onyx wrapper's 50 % alpha composite (which washed black text underneath to grey)
+  but an opaque colour halfway to white (`markerInkColor`, same shade on white paper as before)
+  drawn with `BlendMode.DARKEN` (`drawMarkerStroke`): every pixel keeps the darker of band and
+  page, so text in images — the bridge's machine text — stays fully black under a highlight.
+  Overlapping highlights don't stack darker. The eraser popup has a third eraser between pen and
+  lasso, *marker eraser* (`Eraser.MARKER`, icon `eraser_marker`): drags like the pen eraser but
+  only takes highlighter strokes (`erasableStrokes`). The pen's side button uses whichever eraser
+  is selected, so it too only takes highlighter while that one is chosen. The live Boox
+  raw-drawing layer still shows its own marker while the pen is down.
 - **Highlighter always underneath** (v0.2.6-claudi.22). Marker strokes are drawn before every
   other pen, so highlighting over existing writing no longer covers it. Each group keeps its own
   order; only the drawing order changes, the stored stroke list stays as written

@@ -166,7 +166,7 @@ class OnyxInputHandler(
     private fun applyEraserIndicatorStyle(penEraserColor: Int = Color.BLACK) {
         if (touchHelper == null) return
         when (toolbarState.eraser) {
-            Eraser.PEN -> touchHelper!!.setStrokeStyle(penToStroke(Pen.MARKER))
+            Eraser.PEN, Eraser.MARKER -> touchHelper!!.setStrokeStyle(penToStroke(Pen.MARKER))
                 ?.setStrokeWidth(30f)
                 ?.setStrokeColor(penEraserColor)
 

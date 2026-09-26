@@ -18,7 +18,7 @@ sealed interface OnyxStrokeStyle {
     /** NeoBrushPenWrapper. */
     data object Brush : OnyxStrokeStyle
 
-    /** NeoMarkerPenWrapper — flat translucent band. */
+    /** Flat band blended with DARKEN (fork: drawMarkerStroke, not NeoMarkerPenWrapper). */
     data object Marker : OnyxStrokeStyle
 
     /** NeoCharcoalPenWrapper — textured pencil (charcoal V1). */

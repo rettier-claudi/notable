@@ -268,6 +268,7 @@ private fun eraserIcon(eraser: Eraser): Int =
     when (eraser) {
         Eraser.PEN -> R.drawable.eraser
         Eraser.SELECT -> R.drawable.eraser_select
+        Eraser.MARKER -> R.drawable.eraser_marker
     }
 
 /** The eraser popup: eraser-type picker plus the global scribble-to-erase toggle. */

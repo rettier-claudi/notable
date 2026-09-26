@@ -244,7 +244,7 @@ fun enableNativeEraser(touchHelper: TouchHelper?, eraser: Eraser = Eraser.PEN) {
                 touchHelper.setEraserRawDrawingEnabled(true, SELECT_ERASER_STYLE)
             }
             // Drag/pen erase: the wide marker track (style 8), width from its own params.
-            Eraser.PEN -> {
+            Eraser.PEN, Eraser.MARKER -> {
                 Device.currentDevice().setStrokeParameters(
                     ERASER_STROKE_STYLE,
                     floatArrayOf(ERASER_STROKE_WIDTH, ERASER_STROKE_PARAM1, ERASER_STROKE_PARAM2)

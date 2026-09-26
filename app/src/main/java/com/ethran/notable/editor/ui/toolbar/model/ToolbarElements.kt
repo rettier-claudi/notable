@@ -46,7 +46,7 @@ object ToolbarElements {
             icon = IconRef.Drawable(R.drawable.eraser),
             contentDescription = "eraser",
             mode = Mode.Erase,
-            submenu = EraserSubmenuSpec(erasers = listOf(Eraser.PEN, Eraser.SELECT)),
+            submenu = EraserSubmenuSpec(erasers = listOf(Eraser.PEN, Eraser.MARKER, Eraser.SELECT)),
         ),
         ModeElement(
             id = ToolbarElementId.SELECT,
