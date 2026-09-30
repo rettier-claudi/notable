@@ -63,7 +63,8 @@ fun EditorView(
     startWithFirstPen: Boolean,
 
     // navigation callbacks
-    onPageChange: (String) -> Unit,
+    /** New page id, and the notebook it is in (fork: a quick page can become one, ScratchNoteGrowth.kt). */
+    onPageChange: (String, String?) -> Unit,
     goToLibrary: (folderId: String?) -> Unit,
     leaveToPreviousFolder: () -> Unit,
     goToPages: (bookId: String) -> Unit,
@@ -225,7 +226,7 @@ fun EditorView(
                     page.changePage(newPageId)
 
                     // update the navigation state
-                    onPageChange(newPageId)
+                    onPageChange(newPageId, viewModel.toolbarState.value.notebookId)
                 }
         }
 

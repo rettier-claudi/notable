@@ -239,6 +239,7 @@ class EditorViewModel @Inject constructor(
     private val syncProgressReporter: com.ethran.notable.sync.SyncProgressReporter,
     private val syncWebhookNotifier: com.ethran.notable.sync.SyncWebhookNotifier,
     private val sentMarkStore: com.ethran.notable.sync.SentMarkStore,
+    private val movedQuickPages: com.ethran.notable.data.MovedQuickPages,
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     val snackDispatcher: SnackDispatcher,
     private val historyFactory: History.Factory,
@@ -956,8 +957,38 @@ class EditorViewModel @Inject constructor(
     fun goToNextPage() {
         log.v("goToNextPage")
         viewModelScope.launch(Dispatchers.IO) {
-            getNextPageId()?.let { changePage(it) }
+            if (bookId == null) addPageToScratchNote()
+            else getNextPageId()?.let { changePage(it) }
         }
+    }
+
+    /**
+     * Fork: "next page" on a quick page gives it a second page (ScratchNoteGrowth.kt) -- the page
+     * becomes page 1 of a scratch-kind notebook, and the editor turns to the new empty page 2.
+     * Not on a sent (locked) page, and not on an empty one: there is nothing to continue yet.
+     */
+    private suspend fun addPageToScratchNote() {
+        val pageId = currentPageId
+        if (_toolbarState.value.isPageLocked) {
+            showHint(LOCKED_HINT)
+            return
+        }
+        // The last strokes must be in the database: the emptiness check and the upload read it.
+        if (!pageDataManager.awaitPendingWrites()) return
+        val data = appRepository.pageRepository.getWithDataById(pageId) ?: return
+        if (data.page.notebookId != null) return
+        if (data.strokes.isEmpty() && data.images.isEmpty()) {
+            showHint(EMPTY_SCRATCH_HINT)
+            return
+        }
+        val grown = appRepository.addPageToQuickPage(
+            pageId, com.ethran.notable.sync.QuickPageSyncService.QUICK_PAGES_NOTEBOOK_ID
+        ) { movedQuickPages.add(it) } ?: return
+        bookId = grown.notebookId
+        // Before the page change: EditorView hands the notebook id on to the navigation state
+        // together with the new page id, so a reload of the route keeps the notebook.
+        _toolbarState.update { it.copy(notebookId = grown.notebookId, isBookActive = true) }
+        changePage(grown.newPageId)
     }
 
     fun goToPreviousPage() {
@@ -1061,6 +1092,7 @@ class EditorViewModel @Inject constructor(
 
     companion object {
         const val LOCKED_HINT = "This page was sent and is locked."
+        const val EMPTY_SCRATCH_HINT = "Write on this scratch note first, then add a page."
 
         // Canonical values live in the default pen presets (ToolbarPen.DEFAULT_PENS) —
         // one source of truth. These are fallbacks only; persisted user presets win.

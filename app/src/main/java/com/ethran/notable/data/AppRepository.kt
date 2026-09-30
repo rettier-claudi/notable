@@ -221,6 +221,42 @@ class AppRepository @Inject constructor(
         return page.id
     }
 
+    /**
+     * Fork: "next page" on a quick page (ScratchNoteGrowth.kt). The page becomes page 1 of a new
+     * scratch-kind notebook in the same folder, an empty page 2 is added (unwritten until written
+     * on, like any added page). Null if [pageId] is no quick page (any more).
+     *
+     * The page's quick-page sync row is dropped: without it the notebook sync uploads the page as
+     * new. [onMovedFromServer] runs, before anything changes, with the page id when that row
+     * existed, i.e. when there is a `quickpages/<id>.json` on the server to delete later.
+     */
+    suspend fun addPageToQuickPage(
+        pageId: String,
+        quickPagesNotebookId: String,
+        onMovedFromServer: suspend (String) -> Unit,
+    ): ScratchNoteGrowth? {
+        val page = pageRepository.getById(pageId) ?: return null
+        if (page.notebookId != null) return null
+        val uploaded = pageSyncStateRepository.getByPageIds(listOf(pageId))
+            .any { it.notebookId == quickPagesNotebookId }
+        // Outside the transaction (the Kv store switches threads). Recorded first: a leftover id
+        // for a page that stayed a quick page is dropped again by the next quick-page sync.
+        if (uploaded) onMovedFromServer(pageId)
+        return db.withTransaction {
+            val current = pageRepository.getById(pageId)
+            if (current == null || current.notebookId != null) return@withTransaction null
+            val book = scratchNotebookFor(current, UUID.randomUUID().toString(), Date())
+            bookRepository.createEmpty(book)
+            pageRepository.setNotebookId(pageId, book.id)
+            pageSyncStateRepository.deleteByIds(listOf(pageId))
+            val next = book.newPage()
+            pageRepository.create(next)
+            bookRepository.addPage(book.id, next.id, stamp = false)
+            log.i("Scratch note $pageId now has a second page (notebook ${book.id})")
+            ScratchNoteGrowth(book.id, next.id)
+        }
+    }
+
     /** Fork: [notebook] as the server may see it, without its unwritten new pages. */
     suspend fun withoutUnwrittenPages(notebook: Notebook): Notebook {
         val held = unwrittenPagesToHold(notebook.pageIds, pageRepository.getUnwrittenIds(notebook.pageIds))

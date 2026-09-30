@@ -2,6 +2,8 @@ package com.ethran.notable.sync
 
 import android.content.Context
 import com.ethran.notable.data.AppRepository
+import com.ethran.notable.data.MovedQuickPages
+import com.ethran.notable.data.planMovedQuickPageRemovals
 import com.ethran.notable.data.db.Page
 import com.ethran.notable.data.db.PageSyncState
 import com.ethran.notable.data.deletePage
@@ -38,6 +40,7 @@ import javax.inject.Singleton
 class QuickPageSyncService @Inject constructor(
     private val appRepository: AppRepository,
     private val sentMarkStore: dagger.Lazy<SentMarkStore>,
+    private val movedQuickPages: MovedQuickPages,
     @ApplicationContext private val context: Context,
 ) {
     private val log = SyncLogger
@@ -52,9 +55,11 @@ class QuickPageSyncService @Inject constructor(
         val localPages = appRepository.pageRepository.getAllSinglePages()
         val rows = appRepository.pageSyncStateRepository.getByNotebook(QUICK_PAGES_NOTEBOOK_ID)
             .associateBy { it.pageId }
+        // Fork: quick pages that became page 1 of a scratch note with more pages (ScratchNoteGrowth.kt)
+        val moved = movedQuickPages.get()
         // Nothing here and nothing ever uploaded: no request at all. Without a row, an absent
         // remote file means nothing, so there is also nothing the listing could tell us.
-        if (localPages.isEmpty() && rows.isEmpty()) {
+        if (localPages.isEmpty() && rows.isEmpty() && moved.isEmpty()) {
             return AppResult.Success(QuickPageSyncSummary(0, 0, 0))
         }
         // ALWAYS from a real listing. `null` means "we do not know what is on the server", and the
@@ -112,6 +117,23 @@ class QuickPageSyncService @Inject constructor(
                 deletedRemote++
                 appRepository.pageSyncStateRepository.deleteByIds(listOf(pageId))
             }
+        }
+
+        if (moved.isNotEmpty()) {
+            val movedPlan = planMovedQuickPageRemovals(
+                moved,
+                appRepository.pageRepository.getByIds(moved).associateBy { it.id },
+                appRepository.pageSyncStateRepository.getByPageIds(moved).associateBy { it.pageId },
+                remoteNames,
+            )
+            val done = movedPlan.forget.toMutableList()
+            for (pageId in movedPlan.deleteRemote) {
+                if (client.delete(SyncPaths.quickPageFile(pageId)).onError { errors.add(it) } is AppResult.Success) {
+                    log.i(TAG, "Scratch note $pageId now lives in a notebook; removed its quick-page file")
+                    done += pageId
+                }
+            }
+            movedQuickPages.remove(done)
         }
 
         var deletedLocal = 0

@@ -96,6 +96,10 @@ interface PageDao {
     @Query("SELECT * FROM page WHERE notebookId is null")
     suspend fun getAllSinglePages(): List<Page>
 
+    // Fork: only the column, so a stroke write racing it keeps its updatedAt (ScratchNoteGrowth.kt).
+    @Query("UPDATE page SET notebookId = :notebookId WHERE id = :pageId")
+    suspend fun setNotebookId(pageId: String, notebookId: String?)
+
     // No updatedAt stamp: a quick page's folder is not part of its content, and a locked (sent)
     // page must not read as edited.
     @Query("UPDATE page SET parentFolderId = NULL WHERE parentFolderId = :folderId")
@@ -180,6 +184,8 @@ class PageRepository @Inject constructor(
     suspend fun update(page: Page) {
         return db.update(page)
     }
+
+    suspend fun setNotebookId(pageId: String, notebookId: String?) = db.setNotebookId(pageId, notebookId)
 
     suspend fun delete(pageId: String) {
         return db.delete(pageId)

@@ -59,6 +59,9 @@ interface PageSyncStateDao {
     @Query("DELETE FROM page_sync_state WHERE pageId IN (:pageIds)")
     suspend fun deleteByIds(pageIds: List<String>)
 
+    @Query("SELECT * FROM page_sync_state WHERE pageId IN (:pageIds)")
+    suspend fun getByPageIds(pageIds: List<String>): List<PageSyncState>
+
     @Query("DELETE FROM page_sync_state WHERE notebookId = :notebookId")
     suspend fun deleteByNotebook(notebookId: String)
 }
@@ -73,6 +76,9 @@ class PageSyncStateRepository @Inject constructor(
     suspend fun upsertAll(rows: List<PageSyncState>) {
         if (rows.isNotEmpty()) dao.upsertAll(rows)
     }
+
+    suspend fun getByPageIds(pageIds: List<String>): List<PageSyncState> =
+        if (pageIds.isEmpty()) emptyList() else dao.getByPageIds(pageIds)
 
     suspend fun deleteByIds(pageIds: List<String>) {
         if (pageIds.isNotEmpty()) dao.deleteByIds(pageIds)

@@ -60,6 +60,21 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **A scratch note can have more than one page** (v0.2.6-claudi.24). *Next page* on a quick
+  page — the toolbar arrow (now also shown on an unsent quick page), a page-turn key, a side
+  swipe — turns it into a notebook with `kind = scratch` in the same folder and adds an empty
+  page 2 (`AppRepository.addPageToQuickPage`, `data/ScratchNoteGrowth.kt`). The quick page keeps
+  its id and becomes page 1: the server side knows the note by that id (receipt name
+  `Schmierzettel HH.MM`, PDF `Zettel …`), so both carry on, now with every page. The home screen
+  shows it in the *Scratch notes* row like any scratch-kind notebook; *Send* sends the whole note.
+  Not on a sent (locked) quick page, and not on an empty one (hint instead). If page 2 stays
+  empty it is dropped on close like any unwritten page and the note is a one-page scratch
+  notebook — to the server side the same scratch note. Its old `quickpages/<id>.json` is deleted
+  by the quick-page sync only once the notebook sync has uploaded that page (Kv
+  `MOVED_QUICK_PAGES`, `planMovedQuickPageRemovals`) — earlier, the server side would take the
+  vanished file for a note deleted on the device and withdraw what it had already read. Occasion:
+  Philipp on 2026-09-30, after writing one train of thought on two scratch notes that arrived as
+  two receipts. Untested on the device at release.
 - **Highlighter lets black through, and its own eraser** (v0.2.6-claudi.23). The marker band is
   no longer the Onyx wrapper's 50 % alpha composite (which washed black text underneath to grey)
   but an opaque colour halfway to white (`markerInkColor`, same shade on white paper as before)
@@ -238,7 +253,7 @@ the `upstream` remote and merged in as it moves.
   it back **verbatim** on every upload of that manifest — also a value it does not know — so the
   marker survives this device editing the notebook. Any value other than `scratch`
   (case-insensitive, trimmed) is kept but means nothing here: such a notebook stays in the grid.
-  `kind` is never set by the app; nothing in the UI creates or changes it. A scratch-kind tile
+  `kind` is set by the app in one place only: a quick page that gets a second page (claudi.24, below). A scratch-kind tile
   looks like a real scratch note (100 dp preview, tap opens the **first** page), with a notebook's
   badges — checked box when sent and unchanged since, sync state — and a notebook's long-press
   settings (rename, delete, export); a conflicted one opens the resolution dialog like a grid

@@ -107,7 +107,8 @@ object ToolbarElements {
             id = ToolbarElementId.NEXT_PAGE,
             icon = IconRef.Vector(FeatherIcons.ChevronRight),
             contentDescription = "next page",
-            visibleWhen = { state, _ -> state.notebookId != null },
+            // also on an unsent quick page: it gives the scratch note a second page
+            visibleWhen = { state, _ -> state.notebookId != null || !state.isPageLocked },
             action = ToolbarAction.NextPage,
         ),
         ActionElement(

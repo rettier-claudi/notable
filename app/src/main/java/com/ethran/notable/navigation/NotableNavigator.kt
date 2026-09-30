@@ -201,7 +201,10 @@ class NotableNavigator(
     }
 
 
-    fun onPageChange(backStackEntry: NavBackStackEntry, newPageId: String) {
+    fun onPageChange(backStackEntry: NavBackStackEntry, newPageId: String, bookId: String? = null) {
+        // Fork: a quick page that got a second page is in a notebook now (ScratchNoteGrowth.kt);
+        // saved before the page id, whose state change recomposes the route with it.
+        if (bookId != null) backStackEntry.savedStateHandle[EditorDestination.BOOK_ID_ARG] = bookId
         // SAVE new pageId in savedStateHandle - do not call navigate
         backStackEntry.savedStateHandle["pageId"] = newPageId
         if (backStackEntry.savedStateHandle.get<Int>("pageChangesSinceJump") == 2) {

@@ -96,7 +96,9 @@ fun NotableNavHost(
                     },
                 ),
             ) { backStackEntry ->
-                val bookId = backStackEntry.arguments?.getString(EditorDestination.BOOK_ID_ARG)
+                // Fork: saved state first -- a quick page that got a second page is in a notebook now
+                val bookId = backStackEntry.savedStateHandle.get<String>(EditorDestination.BOOK_ID_ARG)
+                    ?: backStackEntry.arguments?.getString(EditorDestination.BOOK_ID_ARG)
 
                 val currentPageId = appNavigator.resolveAndSyncPageId(backStackEntry)
                 val startWithFirstPen =
@@ -111,11 +113,12 @@ fun NotableNavHost(
                     initialPageId = currentPageId,
                     startWithFirstPen = startWithFirstPen,
                     isQuickNavOpen = appNavigator.isQuickNavOpen,
-                    onPageChange = { newPageId ->
+                    onPageChange = { newPageId, newBookId ->
                         log.d("onPageChange: $newPageId")
                         appNavigator.onPageChange(
                             backStackEntry,
-                            newPageId
+                            newPageId,
+                            newBookId
                         )
                     }
                 )
