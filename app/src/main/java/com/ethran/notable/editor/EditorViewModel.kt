@@ -17,6 +17,7 @@ import com.ethran.notable.data.model.BackgroundType
 import com.ethran.notable.di.ApplicationScope
 import com.ethran.notable.editor.EditorViewModel.Companion.DEFAULT_PEN_SETTINGS
 import com.ethran.notable.editor.canvas.CanvasEventBus
+import com.ethran.notable.editor.canvas.penMayDraw
 import com.ethran.notable.editor.state.ClipboardStore
 import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.state.Mode
@@ -759,6 +760,8 @@ class EditorViewModel @Inject constructor(
                 DeviceCompat.delayBeforeResumingDrawing()
                 // Fork: the editor may have closed during the delay (Send → home screen).
                 if (!editorActive) return@launch
+                // Fork: and a selection may have opened (paste) — don't send a stale "on".
+                if (!_toolbarState.value.isDrawingAllowed || selectionState.isNonEmpty()) return@launch
             }
             CanvasEventBus.isDrawing.emit(shouldBeDrawing)
         }
@@ -1073,7 +1076,13 @@ class EditorViewModel @Inject constructor(
 
     fun setDrawingStateFromCanvas(isDrawing: Boolean) {
         // A locked page never enables the pen, whoever asked (gesture cleanup, QuickNav, focus).
-        _toolbarState.update { it.copy(isDrawing = isDrawing && !it.isPageLocked) }
+        // Fork: neither does an open selection — a late "drawing on" (e.g. the delayed one from
+        // updateDrawingState) used to switch the pen layer on under freshly pasted content.
+        // Read from selectionState itself: isSelectionActive follows it only after recomposition.
+        val selectionOpen = selectionState.isNonEmpty()
+        _toolbarState.update {
+            it.copy(isDrawing = penMayDraw(isDrawing, it.isPageLocked, selectionOpen))
+        }
     }
 
     // --------------------------------------------------------

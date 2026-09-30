@@ -260,16 +260,22 @@ class CanvasObserverRegistry(
 
     private fun observeIsDrawingSnapshot() {
         observerScope.launch {
+            // Fork: no distinctUntilChanged before updateIsDrawing. That compared against the last
+            // value delivered here, not against what the pen layer was set to, so a flip that
+            // happened while the previous update was still running could be swallowed and leave the
+            // layer on with drawing off. updateIsDrawing is a no-op when nothing differs.
+            var last = viewModel.toolbarState.value.isDrawing
             viewModel.toolbarState
                 .map { it.isDrawing }
-                .distinctUntilChanged()
-                .drop(1)
                 .collect {
-                    log.v("isDrawing change to $it")
-                    // We need to close all menus
-                    if (it) {
-                        CanvasEventBus.closeMenusSignal.emit(Unit)
+                    if (it != last) {
+                        last = it
+                        log.v("isDrawing change to $it")
+                        // We need to close all menus
+                        if (it) {
+                            CanvasEventBus.closeMenusSignal.emit(Unit)
 //                        waitForEpdRefresh()
+                        }
                     }
                     inputHandler.updateIsDrawing()
                 }

@@ -40,6 +40,7 @@ import io.shipbook.shipbooksdk.ShipBook
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.thread
 import kotlin.math.max
@@ -55,6 +56,16 @@ class OnyxInputHandler(
 ) {
     var isErasing: Boolean = false
     var lastStrokeEndTime: Long = 0
+
+    // Fork: what the firmware pen layer was last set to by updateIsDrawing/updateActiveSurface
+    // (null: not known yet). updateIsDrawing compares against this instead of trusting that every
+    // isDrawing change reached it — see PenLayerRules.kt.
+    private var appliedIsDrawing: Boolean? = null
+    private val penLayerLock = Mutex()
+
+    // Fork: toolbarState.isDrawing when the current pen stroke began (null: no begin seen).
+    @Volatile
+    private var drawingAtStrokeBegin: Boolean? = null
     private val log = ShipBook.getLogger("DrawCanvas")
     private val toolbarState get() = viewModel.toolbarState.value
 
@@ -82,6 +93,7 @@ class OnyxInputHandler(
         // - erase :  `onBeginRawErasing()` -> `onRawErasingTouchPointMoveReceived()` -> `onRawErasingTouchPointListReceived()` -> `onEndRawErasing()`
 
         override fun onBeginRawDrawing(p0: Boolean, p1: TouchPoint?) {
+            drawingAtStrokeBegin = toolbarState.isDrawing
         }
 
         override fun onEndRawDrawing(p0: Boolean, p1: TouchPoint?) {
@@ -185,16 +197,36 @@ class OnyxInputHandler(
         }
     }
 
-    suspend fun updateIsDrawing() {
-        if(touchHelper == null) return
-        log.i("Update is drawing: $toolbarState.isDrawing")
-        if (toolbarState.isDrawing) {
+    /**
+     * Brings the firmware pen layer in line with toolbarState.isDrawing. Fork: reads the state
+     * again after every suspension and compares against what was actually applied, so a change that
+     * arrives mid-way (or one the distinct-until-changed observer never delivered) can't leave the
+     * layer on while the editor has drawing off. [force] re-applies even if nothing seems to differ.
+     */
+    suspend fun updateIsDrawing(force: Boolean = false) {
+        if (touchHelper == null) return
+        penLayerLock.withLock {
+            var forceNext = force
+            // A few rounds at most: each one re-checks the state that may have flipped meanwhile.
+            repeat(3) {
+                val wanted = toolbarState.isDrawing
+                if (!forceNext && wanted == appliedIsDrawing) return
+                forceNext = false
+                if (!applyIsDrawing(wanted)) return
+            }
+        }
+    }
+
+    /** Returns false if there is no live surface to apply it to. */
+    private suspend fun applyIsDrawing(wanted: Boolean): Boolean {
+        log.i("Update is drawing: $wanted")
+        if (wanted) {
             // Fork: a late "drawing on" (after a gesture or focus change) can arrive once the editor
             // is already gone, e.g. Send → home screen. Enabling raw drawing then leaves the firmware
             // pen layer over the home screen: pen strokes draw instead of navigating.
             if (!isSurfaceLive()) {
                 log.i("Not enabling raw drawing: canvas detached")
-                return
+                return false
             }
             touchHelper!!.setRawDrawingEnabled(true)
             // setRawDrawingEnabled(true) resets the framework stroke config to firmware defaults
@@ -203,6 +235,8 @@ class OnyxInputHandler(
             enableNativeEraser(touchHelper, toolbarState.eraser)
             updatePenAndStroke()
         } else {
+            // Before the first surface setup there is no pen layer to switch off.
+            if (appliedIsDrawing == null && !isSurfaceLive()) return false
             // A pending resetScreenFreeze resume would re-freeze the screen after we disable
             // raw drawing (e.g. lasso select: the select-stroke refreshUi armed it) — kill it.
             cancelPendingScreenFreezeReset()
@@ -212,6 +246,8 @@ class OnyxInputHandler(
             drawCanvas.refreshManager.drawCanvasToView(null)
             touchHelper!!.setRawDrawingEnabled(false)
         }
+        appliedIsDrawing = wanted
+        return true
     }
 
     private fun isSurfaceLive(): Boolean =
@@ -226,22 +262,41 @@ class OnyxInputHandler(
             onSurfaceInit(drawCanvas)
             val toolbarHeight =
                 if (toolbarState.isToolbarOpen) convertDpToPixel(40.dp, drawCanvas.context).toInt() else 0
-            setupSurface(
-                drawCanvas,
-                touchHelper,
-                toolbarHeight
-            )
-            // setupSurface resets the framework stroke style to firmware defaults. Re-send the
-            // pen style here, inside the same coroutine and after the surface is armed: a caller
-            // that invokes updatePenAndStroke() right after updateActiveSurface() would otherwise
-            // race this launch and have its style overwritten.
-            updatePenAndStroke()
+            penLayerLock.withLock {
+                setupSurface(
+                    drawCanvas,
+                    touchHelper,
+                    toolbarHeight
+                )
+                // setupSurface resets the framework stroke style to firmware defaults. Re-send the
+                // pen style here, inside the same coroutine and after the surface is armed: a caller
+                // that invokes updatePenAndStroke() right after updateActiveSurface() would otherwise
+                // race this launch and have its style overwritten.
+                updatePenAndStroke()
+                // Fork: setupSurface always leaves raw drawing on. With drawing off (open selection,
+                // menu, locked page) that is the stuck pen layer from PenLayerRules.kt — undo it.
+                if (!toolbarState.isDrawing) touchHelper?.setRawDrawingEnabled(false)
+                appliedIsDrawing = toolbarState.isDrawing
+            }
         }
     }
     private fun onRawDrawingList(plist: TouchPointList) {
         if (touchHelper == null) return
         // Raw drawing is off on a locked page; this only catches input that raced the switch.
         if (page.isReadOnly) return
+        // Fork: self-heal. Drawing was off for the whole stroke, so the pen layer should have been
+        // off: drop the stroke (it would land under an open selection, or select behind it) and
+        // switch the layer off, which also repaints away the firmware ink.
+        val drawingAtBegin = drawingAtStrokeBegin
+        drawingAtStrokeBegin = null
+        if (isStrayStroke(drawingAtBegin, toolbarState.isDrawing)) {
+            log.w("Pen stroke while drawing is off: pen layer was left on, switching it off")
+            coroutineScope.launch {
+                updateIsDrawing(force = true)
+                drawCanvas.refreshManager.drawCanvasToView(null)
+            }
+            return
+        }
         val currentLastStrokeEndTime = lastStrokeEndTime
         lastStrokeEndTime = System.currentTimeMillis()
         val startTime = System.currentTimeMillis()

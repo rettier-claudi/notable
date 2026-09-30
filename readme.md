@@ -60,6 +60,17 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Pen no longer gets stuck after cut → paste** (v0.2.6-claudi.25). The firmware pen layer
+  could stay on while the editor had drawing off — most visibly with pasted content still
+  floating: the pen drew ink, a lasso selected nothing, and the paste could not be placed with the
+  pen, because the tap outside it went to the firmware. Three ways in were closed:
+  `setDrawingStateFromCanvas` never grants drawing while a selection is open, and the delayed
+  "drawing on" from `updateDrawingState` is dropped if a selection or menu opened meanwhile
+  (`penMayDraw`); `updateActiveSurface` no longer leaves the layer on after `setupSurface` when
+  drawing is off; `updateIsDrawing` compares against what it last applied and re-reads the state
+  after each suspension, instead of relying on the observer's distinct-until-changed (which could
+  swallow a flip that happened mid-update). As a last resort a pen stroke that began and ended
+  with drawing off (`isStrayStroke`) is dropped and switches the layer off (`PenLayerRules.kt`).
 - **A scratch note can have more than one page** (v0.2.6-claudi.24). *Next page* on a quick
   page — the toolbar arrow (now also shown on an unsent quick page), a page-turn key, a side
   swipe — turns it into a notebook with `kind = scratch` in the same folder and adds an empty
