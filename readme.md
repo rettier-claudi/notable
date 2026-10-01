@@ -65,6 +65,11 @@ the `upstream` remote and merged in as it moves.
   (next to *Jump to current*): inserts a page right after the notebook's open page
   (`pageIndexAfter`, at the end if the open page is unknown) and opens it. Left unwritten, it is
   discarded on close like any new page (claudi.16). The per-card *Add page after* in Edit Mode stays.
+  The gesture set to *Go home* in the editor (a swipe, or the two-finger tap) means *back to the
+  document* in the overview: back to the editor it was opened from, else the notebook's open page
+  (`goHomeGesture`, `isGoHomeGesture`, `NotableNavigator.backToDocument`). It only watches (Initial
+  pass, nothing consumed), so scrolling and tapping cards are unaffected; double-tap and hold are
+  left out because a tap opens a page and a hold drags it there.
 - **Pen turns red when the scribble will erase** (v0.2.6-claudi.26). With scribble-to-erase on,
   a pen stroke is checked while it is still being drawn (`LiveScribbleCheck`, fed from
   `onRawDrawingTouchPointMoveReceived`): as soon as lifting the pen would erase something, the

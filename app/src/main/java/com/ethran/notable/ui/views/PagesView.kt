@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ethran.notable.editor.ui.Topbar
 import com.ethran.notable.editor.utils.autoEInkAnimationOnScroll
 import com.ethran.notable.editor.utils.EpdRefreshArbiter
+import com.ethran.notable.gestures.goHomeGesture
 import com.ethran.notable.navigation.NavigationDestination
 import com.ethran.notable.ui.components.BreadCrumb
 import com.ethran.notable.ui.components.FastScroller
@@ -82,6 +83,7 @@ fun PagesView(
     bookId: String,
     goToLibrary: (String?) -> Unit,
     goToEditor: (String, String) -> Unit,
+    backToDocument: (String?, String) -> Unit = { _, _ -> },
     viewModel: PagesViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -107,6 +109,10 @@ fun PagesView(
         onAddPageAfter = { viewModel.newPageInBook(bookId, it) },
         onNewPageAfterCurrent = {
             viewModel.newPageAfterOpenPage(bookId) { pageId -> goToEditor(pageId, bookId) }
+        },
+        // Fork: the editor's Go-home gesture means "back to the document" here.
+        onGoHomeGesture = {
+            backToDocument(state.openPageId ?: state.pageIds.firstOrNull(), bookId)
         })
 }
 
@@ -123,6 +129,7 @@ fun PagesContent(
     onDuplicatePage: (String) -> Unit,
     onAddPageAfter: (Int) -> Unit,
     onNewPageAfterCurrent: () -> Unit = {},
+    onGoHomeGesture: () -> Unit = {},
 ) {
     if (state.isLoading) return
 
@@ -160,7 +167,11 @@ fun PagesContent(
             })
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .goHomeGesture(onGoHomeGesture)
+    ) {
         Topbar {
             Row(
                 Modifier

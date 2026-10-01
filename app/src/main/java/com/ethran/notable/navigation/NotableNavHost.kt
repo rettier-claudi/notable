@@ -134,6 +134,7 @@ fun NotableNavHost(
                     goToLibrary = { folderId -> appNavigator.goToLibrary(folderId) },
                     goToEditor = { pageId, bId -> appNavigator.goToEditor(pageId, bId) },
                     bookId = it.arguments?.getString(PagesDestination.BOOK_ID_ARG)!!,
+                    backToDocument = { pageId, bId -> appNavigator.backToDocument(pageId, bId) },
                 )
             }
             composable(

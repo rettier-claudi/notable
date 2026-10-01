@@ -156,6 +156,17 @@ class NotableNavigator(
         navController.navigate(EditorDestination.createRoute(pageId, bookId))
     }
 
+    /**
+     * Fork: from the page overview back to the document — the editor it was opened from (the
+     * page number in the toolbar), else [pageId] of that notebook.
+     */
+    fun backToDocument(pageId: String?, bookId: String) {
+        if (navController.previousBackStackEntry?.destination?.route == EditorDestination.routeWithArgs)
+            navController.popBackStack()
+        else if (pageId != null)
+            goToEditor(pageId, bookId)
+    }
+
     fun goBack() {
         navController.popBackStack()
     }

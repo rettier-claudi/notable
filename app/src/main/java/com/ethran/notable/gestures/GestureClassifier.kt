@@ -184,3 +184,45 @@ fun twoFingerSwipeAction(
         GestureEvent.Direction.Left -> settings.twoFingerSwipeLeftAction
         GestureEvent.Direction.Right -> settings.twoFingerSwipeRightAction
     }
+
+/** The configured action for a recognized swipe — the editor's mapping, also used by other screens. */
+fun swipeAction(
+    event: GestureEvent.Swipe,
+    settings: com.ethran.notable.data.datastore.AppSettings,
+): com.ethran.notable.data.datastore.AppSettings.GestureAction = when (event.fingers) {
+    1 -> when (event.direction) {
+        GestureEvent.Direction.Left -> settings.swipeLeftAction
+        GestureEvent.Direction.Right -> settings.swipeRightAction
+    }
+
+    // Fork: real two-finger swipes, when assigned (see shouldEnterTransform's
+    // reserveHorizontalSwipe). Unassigned, two fingers keep upstream's behavior: they are
+    // pan/zoom, and a two-finger swipe only lands here on churn edge cases (a finger lifting
+    // mid-gesture), which fire the three-finger action.
+    2 -> twoFingerSwipeAction(event.direction, settings)
+
+    // Three fingers: the multi-finger swipe actions (legacy field names).
+    else -> when (event.direction) {
+        GestureEvent.Direction.Left -> settings.twoFingerSwipeLeftAction
+        GestureEvent.Direction.Right -> settings.twoFingerSwipeRightAction
+    }
+}
+
+/**
+ * Fork: whether [events] contain the gesture that is set to *Go home* in the editor — a swipe or a
+ * two-finger tap. Screens without an editor (the page overview) use it to mean "back to the
+ * document". Double-tap and hold are left out: there a single tap opens a page and a hold drags it.
+ */
+fun isGoHomeGesture(
+    events: List<GestureEvent>,
+    settings: com.ethran.notable.data.datastore.AppSettings,
+): Boolean {
+    val goHome = com.ethran.notable.data.datastore.AppSettings.GestureAction.GoHome
+    return events.any { event ->
+        when (event) {
+            is GestureEvent.Swipe -> swipeAction(event, settings) == goHome
+            is GestureEvent.Tap -> event.fingers == 2 && settings.twoFingerTapAction == goHome
+            else -> false
+        }
+    }
+}

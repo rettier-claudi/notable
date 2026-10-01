@@ -362,28 +362,7 @@ private fun dispatchEvent(event: GestureEvent, ctx: GestureContext) {
 
         GestureEvent.DoubleTap -> resolveGesture(ctx.appSettings.doubleTapAction, ctx)
 
-        is GestureEvent.Swipe -> {
-            val action = when (event.fingers) {
-                1 -> when (event.direction) {
-                    GestureEvent.Direction.Left -> ctx.appSettings.swipeLeftAction
-                    GestureEvent.Direction.Right -> ctx.appSettings.swipeRightAction
-                }
-
-                // Fork: real two-finger swipes, when assigned (see
-                // shouldEnterTransform's reserveHorizontalSwipe). Unassigned, two
-                // fingers keep upstream's behavior: they are pan/zoom, and a
-                // two-finger swipe only lands here on churn edge cases (a finger
-                // lifting mid-gesture), which fire the three-finger action.
-                2 -> twoFingerSwipeAction(event.direction, ctx.appSettings)
-
-                // Three fingers: the multi-finger swipe actions (legacy field names).
-                else -> when (event.direction) {
-                    GestureEvent.Direction.Left -> ctx.appSettings.twoFingerSwipeLeftAction
-                    GestureEvent.Direction.Right -> ctx.appSettings.twoFingerSwipeRightAction
-                }
-            }
-            resolveGesture(action, ctx)
-        }
+        is GestureEvent.Swipe -> resolveGesture(swipeAction(event, ctx.appSettings), ctx)
 
         is GestureEvent.HoldSelect ->
             resolveGesture(ctx.appSettings.holdAction, ctx, event.rect.toAndroidRect())
