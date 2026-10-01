@@ -236,7 +236,7 @@ class NotebookSyncService @Inject constructor(
         // A notebook we recorded as synced but that is no longer local was deleted here. Compare
         // against the notebooks present *now* as well: the download step that ran just before
         // this created sync-state rows for notebooks that were not in the pre-download snapshot.
-        val syncedIds = appRepository.notebookSyncStateRepository.getAllIds()
+        val syncedIds = appRepository.notebookSyncStateRepository.getCommittedIds()
         val currentLocalIds = appRepository.bookRepository.getAll().map { it.id }.toSet()
         val deletedLocally = selectLocallyDeletedNotebookIds(
             syncedNotebookIds = syncedIds,
@@ -304,7 +304,7 @@ class NotebookSyncService @Inject constructor(
         // device mirrors the server and never tombstones), so a synced-but-locally-absent notebook
         // is a copy we lost, not a deletion: it must be re-downloaded. Applying the `synced` filter
         // there stranded every notebook whose local row was wiped while its sync-state row survived.
-        val syncedIds = appRepository.notebookSyncStateRepository.getAllIds()
+        val syncedIds = appRepository.notebookSyncStateRepository.getCommittedIds()
         // remoteNotebookIds is the single PROPFIND listing shared with reconciliation.
         val newNotebookIds = selectNewRemoteNotebookIds(
             remoteNotebookIds = remoteNotebookIds,

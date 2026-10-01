@@ -74,6 +74,10 @@ interface NotebookSyncStateDao {
     @Query("SELECT notebookId FROM notebook_sync_state")
     suspend fun getAllIds(): List<String>
 
+    /** Rows with a real commit anchor; an ERROR row written before any commit has epoch 0. */
+    @Query("SELECT notebookId FROM notebook_sync_state WHERE syncedLocalUpdatedAt > 0")
+    suspend fun getCommittedIds(): List<String>
+
     @Query("SELECT * FROM notebook_sync_state")
     fun getAllFlow(): Flow<List<NotebookSyncState>>
 
@@ -104,6 +108,15 @@ class NotebookSyncStateRepository @Inject constructor(
 ) {
     suspend fun get(id: String): NotebookSyncState? = dao.get(id)
     suspend fun getAllIds(): Set<String> = dao.getAllIds().toSet()
+
+    /**
+     * Notebooks that were actually committed once (uploaded or downloaded). A failed *first*
+     * download leaves an ERROR row with an epoch-0 anchor for a notebook this device never held;
+     * counting that row as "synced" made the next sync skip the download and then tombstone the
+     * notebook on the server as a local deletion (2026-10-01: a sync cut off by the tablet's Wi-Fi
+     * going to sleep deleted a freshly posted notebook for every device).
+     */
+    suspend fun getCommittedIds(): Set<String> = dao.getCommittedIds().toSet()
     fun getAllFlow(): Flow<List<NotebookSyncState>> = dao.getAllFlow()
     suspend fun upsert(state: NotebookSyncState) = dao.upsert(state)
     suspend fun delete(id: String) = dao.delete(id)
