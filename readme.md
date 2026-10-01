@@ -60,6 +60,11 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **New page after the current one, from the page overview** (v0.2.6-claudi.27). Tapping the
+  page number in the editor opens the overview; its top bar now has *New page after current*
+  (next to *Jump to current*): inserts a page right after the notebook's open page
+  (`pageIndexAfter`, at the end if the open page is unknown) and opens it. Left unwritten, it is
+  discarded on close like any new page (claudi.16). The per-card *Add page after* in Edit Mode stays.
 - **Pen turns red when the scribble will erase** (v0.2.6-claudi.26). With scribble-to-erase on,
   a pen stroke is checked while it is still being drawn (`LiveScribbleCheck`, fed from
   `onRawDrawingTouchPointMoveReceived`): as soon as lifting the pen would erase something, the

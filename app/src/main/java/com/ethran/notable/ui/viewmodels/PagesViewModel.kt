@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 
@@ -92,9 +93,29 @@ class PagesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fork: a new page right after the page that is open in the notebook (the last one, if the
+     * open page is unknown), then [onCreated] with its id on the main thread. Index from the stored
+     * notebook, not the UI state, so a reorder that hasn't reached the screen yet still counts.
+     * Left unwritten, the page is discarded when it is closed (UnwrittenPages), like any new page.
+     */
+    fun newPageAfterOpenPage(bookId: String, onCreated: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val book = appRepository.bookRepository.getById(bookId) ?: return@launch
+            val index = pageIndexAfter(book.pageIds, book.openPageId)
+            val pageId = appRepository.newPageInBook(bookId, index) ?: return@launch
+            withContext(Dispatchers.Main) { onCreated(pageId) }
+        }
+    }
+
     fun generateThumbnailsForCurrentBook() {
         val pageIds = _uiState.value.pageIds
         if (pageIds.isEmpty()) return
         thumbnailBackfillQueue.enqueue(pageIds)
     }
+}
+/** Fork: where a page "after the open one" goes; at the end if the open page isn't in the book. */
+fun pageIndexAfter(pageIds: List<String>, openPageId: String?): Int {
+    val open = pageIds.indexOf(openPageId)
+    return if (open < 0) pageIds.size else open + 1
 }

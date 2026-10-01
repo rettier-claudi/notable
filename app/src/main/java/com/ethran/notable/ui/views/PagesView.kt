@@ -104,7 +104,10 @@ fun PagesView(
         onReorder = { id, to -> viewModel.reorderPage(bookId, id, to) },
         onDeletePage = viewModel::deletePage,
         onDuplicatePage = viewModel::duplicatePage,
-        onAddPageAfter = { viewModel.newPageInBook(bookId, it) })
+        onAddPageAfter = { viewModel.newPageInBook(bookId, it) },
+        onNewPageAfterCurrent = {
+            viewModel.newPageAfterOpenPage(bookId) { pageId -> goToEditor(pageId, bookId) }
+        })
 }
 
 
@@ -118,7 +121,8 @@ fun PagesContent(
     onReorder: (String, Int) -> Unit,
     onDeletePage: (String) -> Unit,
     onDuplicatePage: (String) -> Unit,
-    onAddPageAfter: (Int) -> Unit
+    onAddPageAfter: (Int) -> Unit,
+    onNewPageAfterCurrent: () -> Unit = {},
 ) {
     if (state.isLoading) return
 
@@ -176,6 +180,8 @@ fun PagesContent(
                     EditModeSwitch(isEditMode = isEditMode, onToggle = { isEditMode = it })
 
                     if (state.openPageId != null) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        NewPageAfterCurrentPill(onClick = onNewPageAfterCurrent)
                         Spacer(modifier = Modifier.width(12.dp))
                         JumpToCurrentPill {
                             val idx = state.pageIds.indexOf(state.openPageId)
@@ -345,6 +351,24 @@ private fun GenerateThumbsSwitch(onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 8.dp)) {
         Text("Generate previews", color = Color.Black)
+    }
+}
+
+/**
+ * Fork: inserts a page right after the open one and opens it — one tap from the page number in
+ * the editor, without switching to Edit Mode and finding the right card.
+ */
+@Composable
+private fun NewPageAfterCurrentPill(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White)
+            .border(1.dp, Color.Black, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Text("New page after current", color = Color.Black)
     }
 }
 
