@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,7 +62,6 @@ import com.ethran.notable.utils.InsertionSlot
 import com.ethran.notable.utils.ReorderableGridItem
 import com.ethran.notable.utils.computeInsertionSlotRect
 import com.ethran.notable.utils.rememberReorderableGridState
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 
@@ -134,7 +132,6 @@ fun PagesContent(
     if (state.isLoading) return
 
     val gridState = rememberLazyGridState()
-    val scope = rememberCoroutineScope()
 
     // --- 1. State for Edit Mode ---
     var isEditMode by rememberSaveable { mutableStateOf(false) }
@@ -194,10 +191,9 @@ fun PagesContent(
                         Spacer(modifier = Modifier.width(12.dp))
                         NewPageAfterCurrentPill(onClick = onNewPageAfterCurrent)
                         Spacer(modifier = Modifier.width(12.dp))
-                        JumpToCurrentPill {
-                            val idx = state.pageIds.indexOf(state.openPageId)
-                            if (idx >= 0) scope.launch { gridState.scrollToItem(idx) }
-                        }
+                        // Fork: back to the document, like the Go-home gesture — notebooks here are
+                        // short enough that scrolling to the current page was never needed.
+                        JumpToCurrentPill(onClick = onGoHomeGesture)
                     }
                 }
             }

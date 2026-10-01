@@ -12,7 +12,6 @@ import com.ethran.notable.editor.drawing.selectPaint
 import com.ethran.notable.editor.state.Mode
 import com.ethran.notable.editor.utils.DeviceCompat
 import com.ethran.notable.editor.utils.pointsToPath
-import com.ethran.notable.editor.utils.enableNativeEraser
 import com.ethran.notable.editor.utils.refreshScreenRegion
 import com.ethran.notable.editor.utils.resetScreenFreeze
 import com.ethran.notable.utils.logCallStack
@@ -93,15 +92,10 @@ class CanvasRefreshManager(
             // 4. Settle before re-arming (150ms stroke / 500ms area), mirroring the official app.
             DeviceCompat.delayBeforeResumingDrawing(isErasing = true, areaErase = areaErase)
             // 5. Re-arm raw drawing. The heavy toggle resets the eraser channel and stroke
-            //    style, so re-assert both (matches the official C(true) path).
-            if (viewModel.toolbarState.value.isDrawing) {
-                touchHelper?.setRawDrawingEnabled(true)
-                enableNativeEraser(touchHelper, viewModel.toolbarState.value.eraser)
-                drawCanvas.inputHandler.updatePenAndStroke()
-                touchHelper?.setRawInputReaderEnable(true)
-            } else {
-                log.w("commitErase: not in drawing mode, leaving raw drawing disabled")
-            }
+            //    style, so re-assert both (matches the official C(true) path). Fork: through the
+            //    input handler, which also brings the input reader back whenever the layer comes
+            //    back later (drawing was off right now) — see OnyxInputHandler.enablePenLayer.
+            drawCanvas.inputHandler.resumeAfterErase()
         }
     }
 

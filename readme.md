@@ -60,6 +60,14 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Pen no longer stuck after a scribble-erase** (v0.2.6-claudi.28). `commitErase` switches the
+  input reader off for its settle and only switched it back on if drawing was on at that moment.
+  Otherwise the next "drawing on" brought back the firmware ink with the reader still off: the pen
+  drew, nothing reached the app, and the stray-stroke self-heal never saw a stroke. Turning the
+  layer on now always turns the reader on (`OnyxInputHandler.enablePenLayer`), and the end of the
+  settle goes through the handler (`resumeAfterErase`) so `appliedIsDrawing` stays true to the
+  device. *Jump to current* in the page overview now goes back to the document, like the Go-home
+  gesture.
 - **New page after the current one, from the page overview** (v0.2.6-claudi.27). Tapping the
   page number in the editor opens the overview; its top bar now has *New page after current*
   (next to *Jump to current*): inserts a page right after the notebook's open page

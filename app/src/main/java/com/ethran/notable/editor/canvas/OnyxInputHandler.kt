@@ -286,12 +286,7 @@ class OnyxInputHandler(
                 log.i("Not enabling raw drawing: canvas detached")
                 return false
             }
-            touchHelper!!.setRawDrawingEnabled(true)
-            // setRawDrawingEnabled(true) resets the framework stroke config to firmware defaults
-            // (brush channel on, eraser channel off). Re-assert the eraser channel (styled for the
-            // active eraser type) and re-send the active pen style so the next stroke uses the tool.
-            enableNativeEraser(touchHelper, toolbarState.eraser)
-            updatePenAndStroke()
+            enablePenLayer()
         } else {
             // Before the first surface setup there is no pen layer to switch off.
             if (appliedIsDrawing == null && !isSurfaceLive()) return false
@@ -306,6 +301,40 @@ class OnyxInputHandler(
         }
         appliedIsDrawing = wanted
         return true
+    }
+
+    private fun enablePenLayer() {
+        touchHelper!!.setRawDrawingEnabled(true)
+        // setRawDrawingEnabled(true) resets the framework stroke config to firmware defaults
+        // (brush channel on, eraser channel off). Re-assert the eraser channel (styled for the
+        // active eraser type) and re-send the active pen style so the next stroke uses the tool.
+        enableNativeEraser(touchHelper, toolbarState.eraser)
+        updatePenAndStroke()
+        // Fork: commitErase switches the input reader off for its settle. If drawing was off when
+        // the settle ended, it left the reader off, and the next "drawing on" brought back the
+        // firmware ink without any input reaching us — the pen drew, nothing happened, and no
+        // stroke arrived that could have healed it. Whoever turns the layer on turns the reader on.
+        touchHelper!!.setRawInputReaderEnable(true)
+    }
+
+    /**
+     * Fork: end of [CanvasRefreshManager.commitErase]'s settle. Pen layer and input reader come back
+     * per the current state, and appliedIsDrawing says what the layer really is, so the next change
+     * is applied instead of being taken for "already so".
+     */
+    suspend fun resumeAfterErase() {
+        if (touchHelper == null) return
+        penLayerLock.withLock {
+            if (toolbarState.isDrawing && isSurfaceLive()) {
+                enablePenLayer()
+                appliedIsDrawing = true
+            } else {
+                log.w("commitErase: not in drawing mode, leaving raw drawing disabled")
+                appliedIsDrawing = false
+            }
+        }
+        // drawing may have switched while we held the lock
+        updateIsDrawing()
     }
 
     private fun isSurfaceLive(): Boolean =
