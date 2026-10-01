@@ -12,7 +12,6 @@ import com.ethran.notable.data.model.SimplePointF
 import com.ethran.notable.editor.PageView
 import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.state.Operation
-import io.shipbook.shipbooksdk.Log
 
 enum class Eraser(val _name: String) {
     PEN("PEN"), SELECT("SELECT"),
@@ -58,14 +57,7 @@ fun handleScribbleToErase(
     // Fork: shape + ink underneath decide, and the strokes under the swept area go (see
     // ScribbleGeometry.kt). Upstream erased by bounding-box overlap, which left i-dots behind, took
     // the line above along, and needed a long line scribbled over for a fifth of its length.
-    val axis = scribbleAxis(touchPoints) ?: return null
-    val envelope = ScribbleEnvelope.of(touchPoints)
-    val coverage = inkCoverage(envelope, page.strokes)
-    if (coverage < requiredInkCoverage(axis)) {
-        Log.d("ScribbleToErase", "Not over ink: $axis coverage $coverage")
-        return null
-    }
-    val deletedStrokes = selectScribbledStrokes(envelope, page.strokes)
+    val deletedStrokes = scribbleTargets(touchPoints, page.strokes)
 
     // If strokes were found, remove them and update history
     if (deletedStrokes.isNotEmpty()) {

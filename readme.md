@@ -60,6 +60,15 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Pen turns red when the scribble will erase** (v0.2.6-claudi.26). With scribble-to-erase on,
+  a pen stroke is checked while it is still being drawn (`LiveScribbleCheck`, fed from
+  `onRawDrawingTouchPointMoveReceived`): as soon as lifting the pen would erase something, the
+  firmware stroke colour switches to red; it goes back to the tool's colour after the stroke. Live
+  and pen-up use the same decision (`scribbleTargets`), so red means exactly "this will erase".
+  Cost: only strokes that could be a scribble are watched (Draw mode, not the highlighter, after
+  the grace period); the full check runs at most every 80 ms and only once the cheap shape test
+  (`scribbleAxis`) passes, so ordinary writing never touches the page's strokes. Whether the
+  firmware recolours a stroke that is already in progress was not verifiable without the device.
 - **Pen no longer gets stuck after cut → paste** (v0.2.6-claudi.25). The firmware pen layer
   could stay on while the editor had drawing off — most visibly with pasted content still
   floating: the pen drew ink, a lasso selected nothing, and the paste could not be placed with the

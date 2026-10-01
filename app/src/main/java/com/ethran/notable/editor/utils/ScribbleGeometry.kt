@@ -277,3 +277,59 @@ fun selectScribbledStrokes(envelope: ScribbleEnvelope, strokes: List<Stroke>): L
         covered / total >= SCRIBBLE_ERASE_SHARE || longestRun >= minRun
     }
 }
+
+/**
+ * The strokes this pen stroke erases as a scribble, or an empty list if it isn't one: shape
+ * ([scribbleAxis]), ink underneath ([inkCoverage]), then the swept area ([selectScribbledStrokes]).
+ * The one decision both pen-up ([handleScribbleToErase]) and the live red pen ([LiveScribbleCheck])
+ * use, so red while drawing means exactly "this will erase".
+ */
+fun scribbleTargets(points: List<StrokePoint>, strokes: List<Stroke>): List<Stroke> {
+    val axis = scribbleAxis(points) ?: return emptyList()
+    val envelope = ScribbleEnvelope.of(points)
+    if (inkCoverage(envelope, strokes) < requiredInkCoverage(axis)) return emptyList()
+    return selectScribbledStrokes(envelope, strokes)
+}
+
+/** Live re-checks while the pen is down are at least this far apart (and need new points). */
+const val LIVE_SCRIBBLE_CHECK_INTERVAL_MS = 80L
+
+/**
+ * Fork: answers "would lifting the pen now erase something?" while a stroke is still being drawn,
+ * cheaply enough to run on the move callbacks. Points are fed one at a time; the full check runs at
+ * most every [LIVE_SCRIBBLE_CHECK_INTERVAL_MS] and only after the cheap shape test passes. Once it
+ * says yes it stays yes for the stroke — the pen doesn't flicker between red and its own colour.
+ */
+class LiveScribbleCheck(private val intervalMs: Long = LIVE_SCRIBBLE_CHECK_INTERVAL_MS) {
+    private val points = ArrayList<StrokePoint>(256)
+    private var lastCheckAt = Long.MIN_VALUE
+    private var pointsAtLastCheck = 0
+    var detected = false
+        private set
+
+    fun reset() {
+        points.clear()
+        lastCheckAt = Long.MIN_VALUE
+        pointsAtLastCheck = 0
+        detected = false
+    }
+
+    /**
+     * Adds [point] and returns true exactly once: on the call where the stroke first counts as a
+     * scribble that erases something. [strokes] is only read when a check actually runs.
+     */
+    fun add(point: StrokePoint, nowMs: Long, strokes: () -> List<Stroke>): Boolean {
+        if (detected) return false
+        points += point
+        if (points.size < MINIMUM_SCRIBBLE_POINTS) return false
+        if (points.size == pointsAtLastCheck) return false
+        if (lastCheckAt != Long.MIN_VALUE && nowMs - lastCheckAt < intervalMs) return false
+        lastCheckAt = nowMs
+        pointsAtLastCheck = points.size
+        // Shape first: it is O(points) and rules out ordinary writing without touching the page.
+        if (scribbleAxis(points) == null) return false
+        if (scribbleTargets(points, strokes()).isEmpty()) return false
+        detected = true
+        return true
+    }
+}

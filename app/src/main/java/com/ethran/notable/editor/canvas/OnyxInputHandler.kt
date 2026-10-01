@@ -6,13 +6,17 @@ import android.graphics.RectF
 import android.util.Log
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toRect
+import com.ethran.notable.data.datastore.GlobalAppSettings
 import com.ethran.notable.editor.EditorViewModel
 import com.ethran.notable.editor.state.Mode
 import com.ethran.notable.editor.PageView
 import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.utils.DeviceCompat
 import com.ethran.notable.editor.utils.Eraser
+import com.ethran.notable.editor.utils.LiveScribbleCheck
 import com.ethran.notable.editor.utils.Pen
+import com.ethran.notable.editor.utils.SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS
+import com.ethran.notable.editor.utils.toStrokePoint
 import com.ethran.notable.editor.utils.calculateBoundingBox
 import com.ethran.notable.editor.utils.cancelPendingScreenFreezeReset
 import com.ethran.notable.editor.utils.copyInput
@@ -46,6 +50,9 @@ import kotlin.concurrent.thread
 import kotlin.math.max
 import kotlin.math.min
 
+/** Fork: pen colour while a stroke counts as a scribble that will erase. */
+private const val LIVE_SCRIBBLE_COLOR = Color.RED
+
 class OnyxInputHandler(
     private val drawCanvas: DrawCanvas,
     private val page: PageView,
@@ -66,6 +73,11 @@ class OnyxInputHandler(
     // Fork: toolbarState.isDrawing when the current pen stroke began (null: no begin seen).
     @Volatile
     private var drawingAtStrokeBegin: Boolean? = null
+
+    // Fork: live scribble feedback — the pen turns red as soon as lifting it would erase.
+    private val liveScribble = LiveScribbleCheck()
+    private var liveScribbleActive = false
+    private var liveScribbleRed = false
     private val log = ShipBook.getLogger("DrawCanvas")
     private val toolbarState get() = viewModel.toolbarState.value
 
@@ -94,12 +106,15 @@ class OnyxInputHandler(
 
         override fun onBeginRawDrawing(p0: Boolean, p1: TouchPoint?) {
             drawingAtStrokeBegin = toolbarState.isDrawing
+            startLiveScribble(p1)
         }
 
         override fun onEndRawDrawing(p0: Boolean, p1: TouchPoint?) {
+            endLiveScribble()
         }
 
         override fun onRawDrawingTouchPointMoveReceived(p0: TouchPoint?) {
+            if (p0 != null) feedLiveScribble(p0)
         }
 
         override fun onRawDrawingTouchPointListReceived(plist: TouchPointList) =
@@ -138,6 +153,49 @@ class OnyxInputHandler(
         override fun onPenActive(point: TouchPoint?) {
             super.onPenActive(point)
         }
+    }
+
+    /**
+     * Fork: the same conditions [handleScribbleToErase] checks at pen-up, decided once per stroke.
+     * Only these strokes are watched, so ordinary writing with scribble-to-erase off costs nothing.
+     */
+    private fun startLiveScribble(first: TouchPoint?) {
+        liveScribble.reset()
+        resetLiveScribbleColor()
+        val startedAt = first?.timestamp ?: System.currentTimeMillis()
+        liveScribbleActive = touchHelper != null &&
+                toolbarState.isDrawing &&
+                toolbarState.mode == Mode.Draw &&
+                toolbarState.pen != Pen.MARKER &&
+                GlobalAppSettings.current.scribbleToEraseEnabled &&
+                !page.isReadOnly &&
+                startedAt >= lastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS
+        if (liveScribbleActive && first != null) feedLiveScribble(first)
+    }
+
+    private fun feedLiveScribble(point: TouchPoint) {
+        if (!liveScribbleActive) return
+        val pagePoint = point.toStrokePoint(page.scroll, page.zoomLevel.value)
+        if (liveScribble.add(pagePoint, System.currentTimeMillis()) { page.strokes }) {
+            log.d("Live scribble: would erase, pen turns red")
+            // Whether the firmware recolours a stroke already in progress is device-dependent; on
+            // a device that latches the colour at pen-down this shows nothing and does no harm.
+            touchHelper?.setStrokeColor(LIVE_SCRIBBLE_COLOR)
+            liveScribbleRed = true
+        }
+    }
+
+    private fun endLiveScribble() {
+        liveScribbleActive = false
+        liveScribble.reset()
+        resetLiveScribbleColor()
+    }
+
+    private fun resetLiveScribbleColor() {
+        if (!liveScribbleRed) return
+        liveScribbleRed = false
+        // Back to the tool's own colour before the next stroke starts.
+        updatePenAndStroke()
     }
 
     fun updatePenAndStroke() {
