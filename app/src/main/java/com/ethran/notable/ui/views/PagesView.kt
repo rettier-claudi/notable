@@ -393,10 +393,12 @@ private fun JumpToCurrentPill(onClick: () -> Unit) {
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF111111))
             .border(1.dp, Color.Black, RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            // Fork: clickable before the padding — after it, only the text itself reacted and a
+            // tap on the rest of the black pill did nothing.
             .clickable(
                 interactionSource = remember { MutableInteractionSource() }, indication = null
-            ) { onClick() }) {
+            ) { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)) {
         Text("Jump to current", color = Color.White)
     }
 }

@@ -70,6 +70,7 @@ the `upstream` remote and merged in as it moves.
   (`goHomeGesture`, `isGoHomeGesture`, `NotableNavigator.backToDocument`). It only watches (Initial
   pass, nothing consumed), so scrolling and tapping cards are unaffected; double-tap and hold are
   left out because a tap opens a page and a hold drags it there.
+  *Jump to current* reacts on the whole pill again (only its text did).
 - **Pen turns red when the scribble will erase** (v0.2.6-claudi.26). With scribble-to-erase on,
   a pen stroke is checked while it is still being drawn (`LiveScribbleCheck`, fed from
   `onRawDrawingTouchPointMoveReceived`): as soon as lifting the pen would erase something, the
