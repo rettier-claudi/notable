@@ -138,7 +138,7 @@ class LiveScribbleRedLatchTest {
             out += StrokePoint(x, 310f + i * 30f)
         }
         assertTrue(scribbleTargets(out, listOf(word)).isEmpty())
-        assertEquals(listOf(word), confirmedScribbleTargets(out, listOf(word), check.targets))
+        assertEquals(listOf(word), confirmedScribbleTargets(out, listOf(word), check.hit!!))
     }
 
     @Test

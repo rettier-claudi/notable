@@ -423,46 +423,76 @@ fun selectScribbledStrokes(area: ScribbleArea, strokes: List<Stroke>): List<Stro
 private fun durationMs(points: List<StrokePoint>): Int? = points.lastOrNull()?.dt?.toInt()
 
 /**
- * The strokes this pen stroke erases as a scribble, or an empty list if it isn't one: shape
- * ([scribbleAxis]), ink underneath ([inkCoverage]), then the covered area
- * ([selectScribbledStrokes]). The one decision both pen-up ([handleScribbleToErase]) and the live
- * red pen ([LiveScribbleCheck]) use.
- *
- * [rushed]: the stroke began within the grace period after another one. Then it also has to go on
- * for [SCRIBBLE_GRACE_OVERRIDE_MS] with [SCRIBBLE_GRACE_OVERRIDE_REVERSALS] sharp turns.
+ * Besides the whole stroke, its last this-many ms are checked on their own: a stroke that started
+ * as writing (or too soon after the last one) and then went on scribbling still counts, once the
+ * scribbling has gone on long enough. Only when the stroke is at least [SCRIBBLE_TAIL_LEAD_MS]
+ * longer than the window, so the window starts well after the stroke did.
  */
-fun scribbleTargets(points: List<StrokePoint>, strokes: List<Stroke>, rushed: Boolean = false): List<Stroke> {
-    val shape = scribbleShape(points) ?: return emptyList()
-    return scribbleTargets(shape, points, strokes, rushed)
-}
+private val SCRIBBLE_TAIL_WINDOWS_MS = intArrayOf(1500, 1000, 700)
+private const val SCRIBBLE_TAIL_LEAD_MS = 300
 
-private fun scribbleTargets(
-    shape: ScribbleShape, points: List<StrokePoint>, strokes: List<Stroke>, rushed: Boolean,
-): List<Stroke> {
-    val axis = shape.axis ?: return emptyList()
-    val along = shape.along(axis)
-    if (rushed) {
-        val duration = durationMs(points) ?: return emptyList()
-        if (duration < SCRIBBLE_GRACE_OVERRIDE_MS || along.sharpTurns < SCRIBBLE_GRACE_OVERRIDE_REVERSALS) return emptyList()
-    }
-    val area = ScribbleArea.of(shape.samples, along)
-    if (inkCoverage(area, strokes) < requiredInkCoverage(axis)) return emptyList()
-    return selectScribbledStrokes(area, strokes)
-}
+/** A scribble found in a stroke: what it erases, its axis, and from when in the stroke (dt ms). */
+class ScribbleHit(val targets: List<Stroke>, val axis: ScribbleAxis, val fromMs: Int)
 
 /**
- * Pen-up for a stroke that already turned red: it erases, whatever the rest of the stroke did.
- * What the whole stroke covers now, plus what it covered when it turned red ([atRed]) — a scribble
- * that wanders off its ink after turning red must not silently become ink itself.
+ * The scribble in this pen stroke, or null if there is none: shape ([scribbleAxis]), ink
+ * underneath ([inkCoverage]), then the covered area ([selectScribbledStrokes]) — for the whole
+ * stroke, else for its last [SCRIBBLE_TAIL_WINDOWS_MS]. The one decision both pen-up
+ * ([handleScribbleToErase]) and the live red pen ([LiveScribbleCheck]) use. [strokes] is only
+ * called once some part of the stroke is shaped like a scribble.
+ *
+ * [rushed]: the stroke began within the grace period after another one. Then the whole stroke also
+ * has to go on for [SCRIBBLE_GRACE_OVERRIDE_MS] with [SCRIBBLE_GRACE_OVERRIDE_REVERSALS] sharp
+ * turns (a tail window starts later, past the grace period, and needs no more than any scribble).
  */
-fun confirmedScribbleTargets(points: List<StrokePoint>, strokes: List<Stroke>, atRed: List<Stroke>): List<Stroke> {
-    val stillThere = atRed.map { it.id }.toSet()
-    val now = scribbleShape(points)?.let { shape ->
-        val axis = shape.axis ?: return@let emptyList()
-        selectScribbledStrokes(ScribbleArea.of(shape.samples, shape.along(axis)), strokes)
-    } ?: emptyList()
+fun findScribble(points: List<StrokePoint>, strokes: () -> List<Stroke>, rushed: Boolean = false): ScribbleHit? {
+    var page: List<Stroke>? = null
+    val read = { page ?: strokes().also { page = it } }
+    scribbleHit(points, 0, read, rushed)?.let { return it }
+    val duration = durationMs(points) ?: return null
+    for (window in SCRIBBLE_TAIL_WINDOWS_MS) {
+        if (duration < window + SCRIBBLE_TAIL_LEAD_MS) continue
+        val from = duration - window
+        val tail = points.filter { (it.dt?.toInt() ?: 0) >= from }
+        scribbleHit(tail, from, read, rushed = false)?.let { return it }
+    }
+    return null
+}
+
+private fun scribbleHit(
+    points: List<StrokePoint>, fromMs: Int, strokes: () -> List<Stroke>, rushed: Boolean,
+): ScribbleHit? {
+    val shape = scribbleShape(points) ?: return null
+    val axis = shape.axis ?: return null
+    val along = shape.along(axis)
+    if (rushed) {
+        val duration = durationMs(points) ?: return null
+        if (duration < SCRIBBLE_GRACE_OVERRIDE_MS || along.sharpTurns < SCRIBBLE_GRACE_OVERRIDE_REVERSALS) return null
+    }
+    val page = strokes()
+    val area = ScribbleArea.of(shape.samples, along)
+    if (inkCoverage(area, page) < requiredInkCoverage(axis)) return null
+    val targets = selectScribbledStrokes(area, page)
+    return if (targets.isEmpty()) null else ScribbleHit(targets, axis, fromMs)
+}
+
+/** What [findScribble] would erase, or an empty list. */
+fun scribbleTargets(points: List<StrokePoint>, strokes: List<Stroke>, rushed: Boolean = false): List<Stroke> =
+    findScribble(points, { strokes }, rushed)?.targets ?: emptyList()
+
+/**
+ * Pen-up for a stroke that already turned red ([atRed]): it erases, whatever the rest of the
+ * stroke did. Everything under the scribble from where it was found to the end, taken along the
+ * axis it was found on — even if the finished stroke as a whole would not pass as a scribble any
+ * more (a rounder wave that ends with too few sharp turns) — plus what it covered when it turned
+ * red.
+ */
+fun confirmedScribbleTargets(points: List<StrokePoint>, strokes: List<Stroke>, atRed: ScribbleHit): List<Stroke> {
+    val part = points.filter { (it.dt?.toInt() ?: 0) >= atRed.fromMs }.ifEmpty { points }
+    val now = if (part.size >= 2) selectScribbledStrokes(ScribbleArea.of(part, atRed.axis), strokes) else emptyList()
     val ids = now.map { it.id }.toSet()
-    return now + strokes.filter { it.id in stillThere && it.id !in ids }
+    val redIds = atRed.targets.map { it.id }.toSet()
+    return now + strokes.filter { it.id in redIds && it.id !in ids }
 }
 
 /** Live re-checks while the pen is down are at least this far apart (and need new points). */
@@ -471,9 +501,9 @@ const val LIVE_SCRIBBLE_CHECK_INTERVAL_MS = 80L
 /**
  * Fork: answers "would lifting the pen now erase something?" while a stroke is still being drawn,
  * cheaply enough to run on the move callbacks. Points are fed one at a time; the full check runs at
- * most every [LIVE_SCRIBBLE_CHECK_INTERVAL_MS] and only after the cheap shape test passes. Once it
- * says yes it stays yes for the stroke — the pen doesn't flicker between red and its own colour —
- * and pen-up erases ([confirmedScribbleTargets] with [targets]).
+ * most every [LIVE_SCRIBBLE_CHECK_INTERVAL_MS] and only reads the page once the cheap shape test
+ * passes. Once it says yes it stays yes for the stroke — the pen doesn't flicker between red and
+ * its own colour — and pen-up erases ([confirmedScribbleTargets] with [hit]).
  */
 class LiveScribbleCheck(private val intervalMs: Long = LIVE_SCRIBBLE_CHECK_INTERVAL_MS) {
     private val points = ArrayList<StrokePoint>(256)
@@ -481,17 +511,18 @@ class LiveScribbleCheck(private val intervalMs: Long = LIVE_SCRIBBLE_CHECK_INTER
     private var pointsAtLastCheck = 0
     private var rushed = false
 
-    /** What the stroke erased when it turned red; empty while it hasn't. */
-    var targets: List<Stroke> = emptyList()
+    /** The scribble as found when the stroke turned red; null while it hasn't. */
+    var hit: ScribbleHit? = null
         private set
-    val detected: Boolean get() = targets.isNotEmpty()
+    val targets: List<Stroke> get() = hit?.targets ?: emptyList()
+    val detected: Boolean get() = hit != null
 
-    /** [rushed]: the stroke began within the grace period after another one (see [scribbleTargets]). */
+    /** [rushed]: the stroke began within the grace period after another one (see [findScribble]). */
     fun reset(rushed: Boolean = false) {
         points.clear()
         lastCheckAt = Long.MIN_VALUE
         pointsAtLastCheck = 0
-        targets = emptyList()
+        hit = null
         this.rushed = rushed
     }
 
@@ -508,11 +539,7 @@ class LiveScribbleCheck(private val intervalMs: Long = LIVE_SCRIBBLE_CHECK_INTER
         lastCheckAt = nowMs
         pointsAtLastCheck = points.size
         // Shape first: it is O(points) and rules out ordinary writing without touching the page.
-        val shape = scribbleShape(points) ?: return false
-        if (shape.axis == null) return false
-        val found = scribbleTargets(shape, points, strokes(), rushed)
-        if (found.isEmpty()) return false
-        targets = found
+        hit = findScribble(points, strokes, rushed) ?: return false
         return true
     }
 }

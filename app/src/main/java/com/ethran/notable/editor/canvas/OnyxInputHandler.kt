@@ -395,7 +395,7 @@ class OnyxInputHandler(
         val startTime = System.currentTimeMillis()
         // Fork: the stroke turned red while drawing → it erases at pen-up, no second opinion. Taken
         // here, on the SDK thread, before onEndRawDrawing and the next stroke reset it.
-        val redTargets = if (liveScribbleActive) liveScribble.targets else emptyList()
+        val redHit = if (liveScribbleActive) liveScribble.hit else null
 
         when (toolbarState.mode) {
             Mode.Erase -> onRawErasingList(plist)
@@ -477,7 +477,7 @@ class OnyxInputHandler(
                             toolbarState.activePenSetting.color,
                             currentLastStrokeEndTime,
                             firstPointTime,
-                            redTargets,
+                            redHit,
                         )
                         if (erasedByScribbleDirtyRect.isNullOrEmpty()) {
                             log.d("Drawing...")

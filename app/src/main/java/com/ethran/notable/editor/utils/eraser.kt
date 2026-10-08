@@ -49,7 +49,7 @@ fun handleScribbleToErase(
     color: Int,
     currentLastStrokeEndTime: Long,
     firstPointTime: Long,
-    redTargets: List<Stroke> = emptyList(),
+    redHit: ScribbleHit? = null,
 ): Rect? {
     if (pen == Pen.MARKER) return null // do not erase with highlighter
     if (!GlobalAppSettings.current.scribbleToEraseEnabled) return null // scribble to erase is disabled
@@ -63,7 +63,7 @@ fun handleScribbleToErase(
     // the line above along, and needed a long line scribbled over for a fifth of its length.
     // A stroke that turned red while drawing erases, whatever it did after: red means erase.
     val deletedStrokes =
-        if (redTargets.isNotEmpty()) confirmedScribbleTargets(touchPoints, page.strokes, redTargets)
+        if (redHit != null) confirmedScribbleTargets(touchPoints, page.strokes, redHit)
         else scribbleTargets(touchPoints, page.strokes, rushed)
 
     // If strokes were found, remove them and update history

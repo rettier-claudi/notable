@@ -60,6 +60,15 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **A scribble on top of a scribble erases everything; long scribbles count after all**
+  (v0.2.6-claudi.31). A stroke that turned red now erases everything under it at pen-up, along
+  the axis and from the moment it was found (`ScribbleHit`, `confirmedScribbleTargets`), even if
+  the finished stroke would no longer pass as a scribble. Before, a rounder wave over an old
+  scribble turned red over the first word, failed the shape test as a whole, and erased only
+  what was under it at that moment ("Tests" stayed). Besides the whole stroke, its last 1.5 / 1 /
+  0.7 s are checked on their own (`findScribble`): a stroke that began as writing, or within the
+  grace period, still erases once the scribbling has gone on long enough. Live red check
+  simulated point by point over the mirror (5,361 strokes): only the test scribbles fire.
 - **Scribble-to-erase reworked on real test strokes; palm no longer a second finger**
   (v0.2.6-claudi.30). Tuned on Philipp's test pages (2026-10-08, kept as
   `scribble-tests-2026-10-08.txt.gz` with `ScribbleRealPagesTest`):

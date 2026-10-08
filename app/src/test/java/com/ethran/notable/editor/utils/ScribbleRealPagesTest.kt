@@ -110,4 +110,43 @@ class ScribbleRealPagesTest {
         assertTrue(erasedBy("page1", 82).isNotEmpty())
         assertEquals(erasedBy("page1", 83), erasedBy("page1", 83, rushed = true))
     }
+
+    /** Feeds [scribble] point by point like the pen does; returns what pen-up erases. */
+    private fun liveThenPenUp(page: String, scribble: Int, before: List<Stroke>): Set<Int> {
+        val points = stroke(page, scribble).points
+        val check = LiveScribbleCheck()
+        points.forEach { check.add(it, it.dt!!.toLong()) { before } }
+        val hit = check.hit
+        val erased = if (hit != null) confirmedScribbleTargets(points, before, hit) else scribbleTargets(points, before)
+        return erased.map { it.id.substringAfterLast("-").toInt() }.toSet()
+    }
+
+    @Test
+    fun `example 1 - a second, rounder scribble on top erases everything under it`() {
+        // 19 is the first scribble over "Notes Tests" (14-16), kept for the test; 20 goes on top.
+        val before = pages.getValue("page3").filter { it.id.substringAfterLast("-").toInt() in 0..19 }
+        assertEquals(setOf(14, 15, 16, 19), liveThenPenUp("page3", 20, before))
+    }
+
+    @Test
+    fun `the other scribbles on the redone page`() {
+        assertEquals((0..4).toSet(), erasedBy("page3", 17))
+        assertEquals((5..13).toSet(), erasedBy("page3", 18))
+        assertEquals(setOf(14, 15, 16), erasedBy("page3", 19))
+    }
+
+    @Test
+    fun `scribbling on after writing in the same stroke erases once it has gone on long enough`() {
+        // "Test" (page1 0-4), then one stroke: a word written beside it for 1.2 s, then the
+        // scribble 5 over "Test" — as a whole the stroke is no scribble, its tail is.
+        val word = stroke("page1", 5).points
+        val dt0 = 1200
+        val writing = (0..400).map { i ->
+            StrokePoint(700f + i * 1.2f, 520f + 25f * kotlin.math.sin(i / 12f), dt = (i * 3).toUShort())
+        }
+        val joined = writing + word.map { it.copy(dt = (it.dt!!.toInt() + dt0).toUShort()) }
+        val before = (0..4).map { stroke("page1", it) }
+        val erased = scribbleTargets(joined, before).map { it.id.substringAfterLast("-").toInt() }.toSet()
+        assertEquals((0..4).toSet(), erased)
+    }
 }
