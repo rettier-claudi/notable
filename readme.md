@@ -60,6 +60,30 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Scribble-to-erase reworked on real test strokes; palm no longer a second finger**
+  (v0.2.6-claudi.30). Tuned on Philipp's test pages (2026-10-08, kept as
+  `scribble-tests-2026-10-08.txt.gz` with `ScribbleRealPagesTest`):
+  - *Area* (`ScribbleArea`): the zig-zag filled in between consecutive turning points (triangles)
+    plus the pen's own path, instead of 10 px columns of where the pen went. A big sloppy scribble
+    now also covers what lies between its passes — the last t's stem, the T's bar and the traces a
+    large scribble left. Sideways it still ends at the outermost turns.
+  - *Shape*: turns must be sharp (≥ 110° within a fifth of a pass, ≥ 60 % of all turns, at least
+    3). Circles, filled dots, a loop around a line and rounded "mmm" humps are no scribble any more.
+  - *What goes*: ≥ 25 % of a stroke's length in the area (was 40 % of a narrower area), or a
+    continuous piece of half the area's shorter side (was 60 % of its width, which a growing
+    scribble never reached on a long line). Only dots (≤ 16 px) go with the letters under them, at
+    most 0.7 scribble heights above and 2 px sideways; small letters of the line above no longer
+    count as dots.
+  - *Red means erase*: a stroke that turned red erases at pen-up (`confirmedScribbleTargets`:
+    what it covers now plus what it covered when it turned red). Before, pen-up decided again on
+    the whole stroke and could say no. A red pen turns black instead (`liveScribbleColor`).
+  - *Grace period*: within 300 ms of the previous stroke a scribble no longer is ruled out, it has
+    to go on for 600 ms with 6 sharp turns (`rushed`). The previous stroke's end is its last
+    point's timestamp, on the same clock as the next stroke's first point.
+  - *Palm*: a contact landing after the first finger has moved more than the tap tolerance (and
+    after 150 ms) is ignored for the rest of the gesture (`PointerTracker.lateFingerTravelPx`), so
+    the palm touching down as a one-finger drag ends no longer makes it a two-finger swipe.
+  On the 5,336 strokes of the bridge mirror on mike only the test scribbles fire.
 - **Pen no longer stuck after a scribble-erase** (v0.2.6-claudi.28). `commitErase` switches the
   input reader off for its settle and only switched it back on if drawing was on at that moment.
   Otherwise the next "drawing on" brought back the firmware ink with the reader still off: the pen

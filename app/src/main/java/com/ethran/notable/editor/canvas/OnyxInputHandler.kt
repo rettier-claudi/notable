@@ -14,6 +14,7 @@ import com.ethran.notable.editor.state.History
 import com.ethran.notable.editor.utils.DeviceCompat
 import com.ethran.notable.editor.utils.Eraser
 import com.ethran.notable.editor.utils.LiveScribbleCheck
+import com.ethran.notable.editor.utils.liveScribbleColor
 import com.ethran.notable.editor.utils.Pen
 import com.ethran.notable.editor.utils.SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS
 import com.ethran.notable.editor.utils.toStrokePoint
@@ -50,9 +51,6 @@ import kotlin.concurrent.thread
 import kotlin.math.max
 import kotlin.math.min
 
-/** Fork: pen colour while a stroke counts as a scribble that will erase. */
-private const val LIVE_SCRIBBLE_COLOR = Color.RED
-
 class OnyxInputHandler(
     private val drawCanvas: DrawCanvas,
     private val page: PageView,
@@ -62,6 +60,10 @@ class OnyxInputHandler(
     private val strokeHistoryBatch: MutableList<String>,
 ) {
     var isErasing: Boolean = false
+
+    // Fork: timestamp of the previous pen stroke's last point, on the pen's own clock (the same one
+    // the next stroke's first point is stamped with). Upstream took System.currentTimeMillis() when
+    // the point list was handled, which can be later than the pen actually lifted.
     var lastStrokeEndTime: Long = 0
 
     // Fork: what the firmware pen layer was last set to by updateIsDrawing/updateActiveSurface
@@ -78,6 +80,7 @@ class OnyxInputHandler(
     private val liveScribble = LiveScribbleCheck()
     private var liveScribbleActive = false
     private var liveScribbleRed = false
+    private var liveScribbleStart = 0L
     private val log = ShipBook.getLogger("DrawCanvas")
     private val toolbarState get() = viewModel.toolbarState.value
 
@@ -160,34 +163,37 @@ class OnyxInputHandler(
      * Only these strokes are watched, so ordinary writing with scribble-to-erase off costs nothing.
      */
     private fun startLiveScribble(first: TouchPoint?) {
-        liveScribble.reset()
         resetLiveScribbleColor()
         val startedAt = first?.timestamp ?: System.currentTimeMillis()
+        liveScribbleStart = startedAt
+        // Within the grace period after another stroke a scribble needs to go on longer (see
+        // scribbleTargets' rushed), instead of not counting at all.
+        liveScribble.reset(rushed = startedAt < lastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS)
         liveScribbleActive = touchHelper != null &&
                 toolbarState.isDrawing &&
                 toolbarState.mode == Mode.Draw &&
                 toolbarState.pen != Pen.MARKER &&
                 GlobalAppSettings.current.scribbleToEraseEnabled &&
-                !page.isReadOnly &&
-                startedAt >= lastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS
+                !page.isReadOnly
         if (liveScribbleActive && first != null) feedLiveScribble(first)
     }
 
     private fun feedLiveScribble(point: TouchPoint) {
         if (!liveScribbleActive) return
-        val pagePoint = point.toStrokePoint(page.scroll, page.zoomLevel.value)
+        val dt = (point.timestamp - liveScribbleStart).coerceIn(0L, 65_535L).toInt().toUShort()
+        val pagePoint = point.toStrokePoint(page.scroll, page.zoomLevel.value).copy(dt = dt)
         if (liveScribble.add(pagePoint, System.currentTimeMillis()) { page.strokes }) {
             log.d("Live scribble: would erase, pen turns red")
-            // Whether the firmware recolours a stroke already in progress is device-dependent; on
-            // a device that latches the colour at pen-down this shows nothing and does no harm.
-            touchHelper?.setStrokeColor(LIVE_SCRIBBLE_COLOR)
+            // The firmware recolours the stroke in progress (confirmed on the Note Air 5C). A red
+            // pen turns black instead.
+            touchHelper?.setStrokeColor(liveScribbleColor(toolbarState.activePenSetting.color))
             liveScribbleRed = true
         }
     }
 
     private fun endLiveScribble() {
         liveScribbleActive = false
-        liveScribble.reset()
+        // Not reset here: onRawDrawingList (called just before, same thread) has taken the result.
         resetLiveScribbleColor()
     }
 
@@ -385,8 +391,11 @@ class OnyxInputHandler(
             return
         }
         val currentLastStrokeEndTime = lastStrokeEndTime
-        lastStrokeEndTime = System.currentTimeMillis()
+        lastStrokeEndTime = plist.points.lastOrNull()?.timestamp ?: System.currentTimeMillis()
         val startTime = System.currentTimeMillis()
+        // Fork: the stroke turned red while drawing → it erases at pen-up, no second opinion. Taken
+        // here, on the SDK thread, before onEndRawDrawing and the next stroke reset it.
+        val redTargets = if (liveScribbleActive) liveScribble.targets else emptyList()
 
         when (toolbarState.mode) {
             Mode.Erase -> onRawErasingList(plist)
@@ -467,7 +476,8 @@ class OnyxInputHandler(
                             toolbarState.activePenSetting.strokeSize,
                             toolbarState.activePenSetting.color,
                             currentLastStrokeEndTime,
-                            firstPointTime
+                            firstPointTime,
+                            redTargets,
                         )
                         if (erasedByScribbleDirtyRect.isNullOrEmpty()) {
                             log.d("Drawing...")

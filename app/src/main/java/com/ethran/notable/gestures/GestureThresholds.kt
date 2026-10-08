@@ -15,6 +15,11 @@ const val DOUBLE_TAP_MIN_MS = 20L
 // height). The writing hand rests bottom right and its taps fired the double-tap action.
 const val DOUBLE_TAP_ZONE_FRACTION = 2f / 3f
 
+// Fork: fingers of one multi-finger gesture land within this long of each other — or before the
+// first one has moved (see PointerTracker.lateFingerTravelPx). A palm touching down as a one-finger
+// drag ends made it a two-finger swipe.
+const val LATE_FINGER_GRACE_MS = 150L
+
 // Pinch thresholds are distance *ratios*, also density-independent.
 const val PINCH_ZOOM_THRESHOLD = 0.5f
 const val PINCH_ZOOM_THRESHOLD_CONTINUOUS = 0.25f

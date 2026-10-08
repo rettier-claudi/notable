@@ -24,7 +24,8 @@ enum class Eraser(val _name: String) {
 fun erasableStrokes(strokes: List<Stroke>, eraser: Eraser): List<Stroke> =
     if (eraser == Eraser.MARKER) strokes.filter { it.pen == Pen.MARKER } else strokes
 
-// Fork: 300 ms (upstream 150). A short lift between letters must not start a scribble.
+// Fork: 300 ms (upstream 150). A short lift between letters must not start a scribble; within it a
+// scribble has to go on longer (SCRIBBLE_GRACE_OVERRIDE_MS).
 const val SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS = 300L
 
 /**
@@ -47,17 +48,23 @@ fun handleScribbleToErase(
     strokeSize: Float,
     color: Int,
     currentLastStrokeEndTime: Long,
-    firstPointTime: Long
+    firstPointTime: Long,
+    redTargets: List<Stroke> = emptyList(),
 ): Rect? {
     if (pen == Pen.MARKER) return null // do not erase with highlighter
     if (!GlobalAppSettings.current.scribbleToEraseEnabled) return null // scribble to erase is disabled
     if (touchPoints.size < MINIMUM_SCRIBBLE_POINTS) return null
-    if (firstPointTime < currentLastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS) return null // not enough time has passed since last stroke
+    // Fork: soon after another stroke a scribble isn't ruled out any more, it just has to go on
+    // longer (scribbleTargets' rushed) — fast writing stays ink, scribbling on erases.
+    val rushed = firstPointTime < currentLastStrokeEndTime + SCRIBBLE_TO_ERASE_GRACE_PERIOD_MS
 
-    // Fork: shape + ink underneath decide, and the strokes under the swept area go (see
+    // Fork: shape + ink underneath decide, and the strokes under the covered area go (see
     // ScribbleGeometry.kt). Upstream erased by bounding-box overlap, which left i-dots behind, took
     // the line above along, and needed a long line scribbled over for a fifth of its length.
-    val deletedStrokes = scribbleTargets(touchPoints, page.strokes)
+    // A stroke that turned red while drawing erases, whatever it did after: red means erase.
+    val deletedStrokes =
+        if (redTargets.isNotEmpty()) confirmedScribbleTargets(touchPoints, page.strokes, redTargets)
+        else scribbleTargets(touchPoints, page.strokes, rushed)
 
     // If strokes were found, remove them and update history
     if (deletedStrokes.isNotEmpty()) {

@@ -109,3 +109,43 @@ class LiveScribbleCheckTest {
         assertTrue(feed(check, zigZag(100f, 200f, 290f, 310f, passes = 12), page) != null)
     }
 }
+
+/** Fork: red means erase, and the red pen turns black instead. */
+class LiveScribbleRedLatchTest {
+    private fun ink(x0: Float, x1: Float, y: Float): Stroke {
+        val points = (0..40).map { StrokePoint(x0 + (x1 - x0) * it / 40, y) }
+        return Stroke(
+            size = 5f, pen = Pen.BALLPEN, top = y - 5f, bottom = y + 5f, left = x0 - 5f, right = x1 + 5f,
+            points = points, pageId = "p",
+        )
+    }
+
+    @Test
+    fun `a stroke that turned red erases even if it then wanders off the ink`() {
+        val word = ink(100f, 200f, 300f)
+        val out = mutableListOf(StrokePoint(100f, 290f))
+        for (i in 1..12) {
+            val x = if (i % 2 == 0) 100f else 200f
+            val last = out.last()
+            for (k in 1..10) out += StrokePoint(last.x + (x - last.x) * k / 10, last.y + (290f + 20f * i / 12 - last.y) * k / 10)
+        }
+        val check = LiveScribbleCheck(intervalMs = 0)
+        out.forEachIndexed { i, p -> check.add(p, i.toLong()) { listOf(word) } }
+        assertTrue(check.detected)
+        // Then a long zig-zag over blank paper: on its own the whole stroke would not count any more.
+        for (i in 1..30) {
+            val x = if (i % 2 == 0) 200f else 900f
+            out += StrokePoint(x, 310f + i * 30f)
+        }
+        assertTrue(scribbleTargets(out, listOf(word)).isEmpty())
+        assertEquals(listOf(word), confirmedScribbleTargets(out, listOf(word), check.targets))
+    }
+
+    @Test
+    fun `red pen turns black, others red`() {
+        assertEquals(LIVE_SCRIBBLE_BLACK, liveScribbleColor(0xFFE53935.toInt()))
+        assertEquals(LIVE_SCRIBBLE_RED, liveScribbleColor(0xFF000000.toInt()))
+        assertEquals(LIVE_SCRIBBLE_RED, liveScribbleColor(0xFF00FF00.toInt()))
+        assertEquals(LIVE_SCRIBBLE_RED, liveScribbleColor(0xFF1E88E5.toInt()))
+    }
+}

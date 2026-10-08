@@ -52,10 +52,10 @@ class ScribbleRealStrokesTest {
     private fun erasedBy(scribble: List<StrokePoint>, page: Map<String, Stroke>): Set<String> {
         val ink = page.filterKeys { !it.startsWith("scribble") }
         val axis = scribbleAxis(scribble)!!
-        val envelope = ScribbleEnvelope.of(scribble)
-        val coverage = inkCoverage(envelope, ink.values.toList())
+        val area = ScribbleArea.of(scribble, axis)
+        val coverage = inkCoverage(area, ink.values.toList())
         assert(coverage >= requiredInkCoverage(axis)) { "coverage $coverage" }
-        val erased = selectScribbledStrokes(envelope, ink.values.toList())
+        val erased = selectScribbledStrokes(area, ink.values.toList())
         return ink.filterValues { it in erased }.keys
     }
 

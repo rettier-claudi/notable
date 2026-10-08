@@ -56,6 +56,8 @@ class ScribbleGeometryTest {
         return polyline(*xy.toFloatArray())
     }
 
+    private fun area(scribble: List<StrokePoint>) = ScribbleArea.of(scribble, scribbleAxis(scribble)!!)
+
     // --- Is it a scribble? --------------------------------------------------------------------
 
     @Test
@@ -74,12 +76,13 @@ class ScribbleGeometryTest {
     }
 
     @Test
-    fun `mmm written under a line lies on blank paper`() {
+    fun `mmm written under a line is no scribble, or lies on blank paper`() {
         val lineAbove = listOf(stroke(mmm(100f, 140f, 6)))
         // Written 90 px lower: the humps reach up to 165, the line above ends at 140 + stroke size.
         val newWord = mmm(100f, 230f, 4)
-        val axis = scribbleAxis(newWord)!! // humps reverse vertically: shaped like a scribble
-        val coverage = inkCoverage(ScribbleEnvelope.of(newWord), lineAbove)
+        // The humps reverse vertically, but round over their flat tops: no sharp turns.
+        val axis = scribbleAxis(newWord) ?: return
+        val coverage = inkCoverage(ScribbleArea.of(newWord, axis), lineAbove)
         assertTrue("coverage $coverage", coverage < requiredInkCoverage(axis))
     }
 
@@ -88,7 +91,7 @@ class ScribbleGeometryTest {
         val word = listOf(stroke(mmm(100f, 140f, 6)))
         val scribble = horizontalScribble(95f, 285f, 105f, 140f)
         val axis = scribbleAxis(scribble)!!
-        assertTrue(inkCoverage(ScribbleEnvelope.of(scribble), word) >= requiredInkCoverage(axis))
+        assertTrue(inkCoverage(area(scribble), word) >= requiredInkCoverage(axis))
     }
 
     // --- What does it erase? ------------------------------------------------------------------
@@ -99,7 +102,7 @@ class ScribbleGeometryTest {
         val iDot = stroke(polyline(160f, 88f, 161f, 89f)) // ~17 px above the x-height
         val comma = stroke(polyline(225f, 138f, 222f, 152f)) // after the word, below baseline
         val scribble = horizontalScribble(95f, 215f, 108f, 138f)
-        val erased = selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, iDot, comma))
+        val erased = selectScribbledStrokes(area(scribble), listOf(word, iDot, comma))
         assertTrue(word in erased)
         assertTrue("i-dot", iDot in erased)
         assertFalse("comma", comma in erased)
@@ -110,7 +113,7 @@ class ScribbleGeometryTest {
         val word = stroke(mmm(100f, 140f, 4))
         val comma = stroke(polyline(225f, 138f, 222f, 152f))
         val scribble = horizontalScribble(95f, 230f, 108f, 140f)
-        assertTrue(comma in selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, comma)))
+        assertTrue(comma in selectScribbledStrokes(area(scribble), listOf(word, comma)))
     }
 
     @Test
@@ -118,7 +121,7 @@ class ScribbleGeometryTest {
         val word = stroke(mmm(100f, 140f, 4))
         val dot = stroke(polyline(232f, 90f, 233f, 91f)) // above, but 12 px right of the scribble
         val scribble = horizontalScribble(95f, 220f, 108f, 138f)
-        assertFalse(dot in selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, dot)))
+        assertFalse(dot in selectScribbledStrokes(area(scribble), listOf(word, dot)))
     }
 
     @Test
@@ -128,7 +131,7 @@ class ScribbleGeometryTest {
         val gTail = stroke(polyline(130f, 15f, 130f, 50f, 130f, 110f, 115f, 118f))
         val word = stroke(mmm(100f, 140f, 6))
         val scribble = horizontalScribble(95f, 285f, 105f, 140f)
-        val erased = selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(lineAbove, gTail, word))
+        val erased = selectScribbledStrokes(area(scribble), listOf(lineAbove, gTail, word))
         assertTrue(word in erased)
         assertFalse(lineAbove in erased)
         assertFalse("g tail", gTail in erased)
@@ -139,16 +142,16 @@ class ScribbleGeometryTest {
         val line = stroke(polyline(0f, 300f, 1200f, 304f))
         val scribble = horizontalScribble(500f, 560f, 285f, 318f, passes = 6)
         assertEquals(ScribbleAxis.HORIZONTAL, scribbleAxis(scribble))
-        val envelope = ScribbleEnvelope.of(scribble)
-        assertTrue(inkCoverage(envelope, listOf(line)) >= SCRIBBLE_MIN_INK_COVERAGE)
-        assertEquals(listOf(line), selectScribbledStrokes(envelope, listOf(line)))
+        val area = area(scribble)
+        assertTrue(inkCoverage(area, listOf(line)) >= SCRIBBLE_MIN_INK_COVERAGE)
+        assertEquals(listOf(line), selectScribbledStrokes(area, listOf(line)))
     }
 
     @Test
     fun `a long line below the scribble stays`() {
         val scribble = horizontalScribble(100f, 300f, 105f, 140f)
         val lineBelow = stroke(polyline(0f, 175f, 1200f, 175f))
-        assertTrue(selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(lineBelow)).isEmpty())
+        assertTrue(selectScribbledStrokes(area(scribble), listOf(lineBelow)).isEmpty())
     }
 
     @Test
@@ -156,7 +159,7 @@ class ScribbleGeometryTest {
         val word = stroke(mmm(100f, 140f, 4))
         val dotLineAbove = stroke(polyline(160f, 40f, 161f, 41f))
         val scribble = horizontalScribble(95f, 220f, 108f, 138f)
-        val erased = selectScribbledStrokes(ScribbleEnvelope.of(scribble), listOf(word, dotLineAbove))
+        val erased = selectScribbledStrokes(area(scribble), listOf(word, dotLineAbove))
         assertFalse(dotLineAbove in erased)
     }
 }

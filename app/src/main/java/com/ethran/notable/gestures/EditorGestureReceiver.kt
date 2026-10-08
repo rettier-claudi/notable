@@ -66,8 +66,11 @@ private class GestureContext(
  * only ever assigned through `applyGestureMode` (both are private to this
  * file, so the compiler enforces it).
  */
-private class Recognizer {
-    val tracker = PointerTracker(now = { SystemClock.uptimeMillis() })
+private class Recognizer(thresholds: GestureThresholds) {
+    val tracker = PointerTracker(
+        now = { SystemClock.uptimeMillis() },
+        lateFingerTravelPx = thresholds.tapMovementTolerancePx,
+    )
     var mode: GestureMode = GestureMode.Normal
 }
 
@@ -115,7 +118,7 @@ fun EditorGestureReceiver(
                             return@awaitEachGesture
                         }
 
-                        recognizer = Recognizer()
+                        recognizer = Recognizer(ctx.thresholds)
                         recognizer.tracker.update(down)
 
                         when (trackGesture(recognizer, ctx)) {

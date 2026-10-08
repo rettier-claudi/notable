@@ -28,6 +28,12 @@ private class PointerTrack(
  */
 class PointerTracker(
     private val now: () -> Long,
+    /**
+     * Fork: a contact that lands once the fingers already down have moved more than this (and
+     * after [LATE_FINGER_GRACE_MS]) is not a finger of this gesture — the palm touching down as a
+     * one-finger drag ends. It is ignored for the rest of the gesture. Default: off (tests).
+     */
+    private val lateFingerTravelPx: Float = Float.POSITIVE_INFINITY,
 ) {
     val initialTimestamp: Long = now()
 
@@ -42,6 +48,9 @@ class PointerTracker(
     // Insertion-ordered: first entry is the first finger that went down.
     // Keyed by the raw pointer-id value so tests don't need PointerId.
     private val pointers = LinkedHashMap<Long, PointerTrack>()
+
+    // Fork: contacts that landed too late to count (see lateFingerTravelPx).
+    private val ignoredIds = HashSet<Long>()
 
     /**
      * Highest number of simultaneously pressed fingers seen in this gesture.
@@ -80,8 +89,13 @@ class PointerTracker(
 
     /** Raw-value overload for tests. */
     fun update(id: Long, position: Offset, pressed: Boolean, timestamp: Long) {
-        lastInputTimestamp = timestamp
+        if (id in ignoredIds) return
         val track = pointers[id]
+        if (track == null && pressed && isLateLanding(timestamp)) {
+            ignoredIds += id
+            return
+        }
+        lastInputTimestamp = timestamp
         if (track == null) {
             if (!pressed) return
             pointers[id] = PointerTrack(position, position)
@@ -117,6 +131,13 @@ class PointerTracker(
         if (reference != null && ids == netTravelRefIds) netTravel += centroid - reference
         netTravelRefCentroid = centroid
         netTravelRefIds = ids
+    }
+
+    private fun isLateLanding(timestamp: Long): Boolean {
+        if (timestamp - initialTimestamp <= LATE_FINGER_GRACE_MS) return false
+        val moving = pointers.values.filter { it.pressed }
+        if (moving.isEmpty()) return false
+        return moving.maxOf { (it.currentPosition - it.downPosition).getDistance() } > lateFingerTravelPx
     }
 
     /** Number of fingers currently on the screen. */
