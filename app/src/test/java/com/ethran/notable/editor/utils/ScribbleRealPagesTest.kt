@@ -149,4 +149,34 @@ class ScribbleRealPagesTest {
         val erased = scribbleTargets(joined, before).map { it.id.substringAfterLast("-").toInt() }.toSet()
         assertEquals((0..4).toSet(), erased)
     }
+
+    /** Zig-zag from [x0] to [x1] with passes [step] px apart between [top] and [bottom], 2 ms per point. */
+    private fun sweep(x0: Float, x1: Float, top: Float, bottom: Float, step: Float): List<StrokePoint> {
+        val out = mutableListOf<StrokePoint>()
+        var x = x0
+        var up = false
+        while (x <= x1) {
+            val y0 = if (up) bottom else top
+            val y1 = if (up) top else bottom
+            for (k in 0..10) out += StrokePoint(x + step * k / 10, y0 + (y1 - y0) * k / 10)
+            x += step
+            up = !up
+        }
+        return out.mapIndexed { i, p -> p.copy(dt = (i * 2).toUShort()) }
+    }
+
+    @Test
+    fun `a scribble starting beside a short word erases it once its passes are on it`() {
+        // "es" spans x 597-662: the zig-zag starts 120 px to the left, so as a whole it covers
+        // little ink; its passes over the word lie on ink.
+        val es = listOf(stroke("es", 0), stroke("es", 1))
+        val scribble = sweep(480f, 680f, 580f, 645f, step = 12f)
+        assertEquals(setOf("es-0", "es-1"), scribbleTargets(scribble, es).map { it.id }.toSet())
+    }
+
+    @Test
+    fun `the same zig-zag on blank paper beside the word erases nothing`() {
+        val es = listOf(stroke("es", 0), stroke("es", 1))
+        assertTrue(scribbleTargets(sweep(300f, 560f, 580f, 645f, step = 12f), es).isEmpty())
+    }
 }

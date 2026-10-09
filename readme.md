@@ -60,6 +60,13 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **A scribble that starts beside a short word engages once it is on the word**
+  (v0.2.6-claudi.32). A vertical zig-zag needs ink in 60 % of its width; one that starts beside
+  "es" and sweeps across it never got there. `localInkCoverage`: if the whole scribble falls
+  short, any 4 consecutive passes with ink in 75 % of their width count as on ink (stricter than
+  the whole, so cursive humps crossing a descender stay ink; 50 % for the whole stroke brought
+  that false positive back). A huge scribble that crosses a small word only once or twice still
+  does not count.
 - **A scribble on top of a scribble erases everything; long scribbles count after all**
   (v0.2.6-claudi.31). A stroke that turned red now erases everything under it at pen-up, along
   the axis and from the moment it was found (`ScribbleHit`, `confirmedScribbleTargets`), even if

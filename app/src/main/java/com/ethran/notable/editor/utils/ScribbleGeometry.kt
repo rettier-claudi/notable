@@ -371,6 +371,31 @@ fun inkCoverage(area: ScribbleArea, strokes: List<Stroke>): Float {
     return covered.count { it } / columns.toFloat()
 }
 
+/** Passes per stretch for [localInkCoverage]. */
+internal var SCRIBBLE_LOCAL_PASSES = 4
+
+/** A stretch needs more ink under it than the whole scribble: cursive humps crossing a descender fill a few passes. */
+internal var SCRIBBLE_LOCAL_MIN_INK_COVERAGE = 0.75f
+
+/**
+ * [inkCoverage] of the whole scribble, or of its best stretch of [SCRIBBLE_LOCAL_PASSES]
+ * consecutive passes: a scribble that starts beside a short word and sweeps across it covers
+ * little ink as a whole, but its passes over the word lie on ink.
+ */
+internal fun localInkCoverage(samples: List<Pt>, shape: AxisShape, area: ScribbleArea, strokes: List<Stroke>): Float {
+    val whole = inkCoverage(area, strokes)
+    val required = requiredInkCoverage(shape.axis)
+    if (whole >= required) return whole
+    val localRequired = max(required, SCRIBBLE_LOCAL_MIN_INK_COVERAGE)
+    val turns = listOf(0) + shape.turns + listOf(samples.size - 1)
+    for (k in 0 until turns.size - SCRIBBLE_LOCAL_PASSES) {
+        val part = samples.subList(turns[k], turns[k + SCRIBBLE_LOCAL_PASSES] + 1)
+        // A stretch that is on ink counts as fully covered; otherwise the whole stroke's figure stands.
+        if (inkCoverage(ScribbleArea.of(part, axisShape(part, shape.axis)), strokes) >= localRequired) return 1f
+    }
+    return whole
+}
+
 /** Minimum ink coverage for a scribble on [axis]. */
 fun requiredInkCoverage(axis: ScribbleAxis): Float = when (axis) {
     ScribbleAxis.HORIZONTAL -> SCRIBBLE_MIN_INK_COVERAGE
@@ -471,7 +496,7 @@ private fun scribbleHit(
     }
     val page = strokes()
     val area = ScribbleArea.of(shape.samples, along)
-    if (inkCoverage(area, page) < requiredInkCoverage(axis)) return null
+    if (localInkCoverage(shape.samples, along, area, page) < requiredInkCoverage(axis)) return null
     val targets = selectScribbledStrokes(area, page)
     return if (targets.isEmpty()) null else ScribbleHit(targets, axis, fromMs)
 }
