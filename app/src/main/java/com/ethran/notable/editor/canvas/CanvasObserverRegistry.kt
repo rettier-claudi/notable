@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
+
+
+private val COMMIT_HISTORY_DEBOUNCE_TIME = 150.milliseconds // // Maximum pause between strokes for them to be grouped together
 
 class CanvasObserverRegistry(
     private val coroutineScope: CoroutineScope,
@@ -252,6 +256,7 @@ class CanvasObserverRegistry(
                 .drop(1)
                 .collect { eraser ->
                     log.v("eraser change: $eraser")
+                    inputHandler.updateEraserTrack()
                     inputHandler.updatePenAndStroke()
                     refreshManager.refreshUiSuspend()
                 }
@@ -315,7 +320,7 @@ class CanvasObserverRegistry(
     private fun observeHistory() {
         observerScope.launch {
             // After 500ms add to history strokes
-            CanvasEventBus.commitHistorySignal.debounce(500).collect {
+            CanvasEventBus.commitHistorySignal.debounce(COMMIT_HISTORY_DEBOUNCE_TIME).collect {
                 log.v("Commiting to history")
                 drawCanvas.commitToHistory()
             }
@@ -344,7 +349,9 @@ class CanvasObserverRegistry(
         observerScope.launch {
             CanvasEventBus.previewPage.debounce(50).collectLatest { pageId ->
                 if (!CanvasEventBus.isScrubbing.value) return@collectLatest // dropped — scrub already ended
-                val pageNumber = pageDataManager.getPageNumberInCurrentNotebook(pageId)
+                // Null for a loose page, or if sync has just deleted the notebook.
+                val pageNumber = page.openPage.record?.notebookId
+                    ?.let { viewModel.appRepository.bookRepository.getPageIndex(it, pageId) }
                 val pageUpdatedAtMs = pageDataManager.getPageUpdatedAt(pageId)
 
                 log.d("QuickNav IO load started for page $pageId")

@@ -2,6 +2,7 @@ package com.ethran.notable
 
 import android.app.Application
 import android.util.Log
+import com.onyx.android.sdk.base.utils.ResManager
 import com.onyx.android.sdk.rx.RxManager
 import dagger.hilt.android.HiltAndroidApp
 import io.shipbook.shipbooksdk.ShipBook
@@ -27,13 +28,16 @@ class NotableApp : Application() {
         // Pure cleanup (dir listing/sort/delete) — off the main thread to keep cold start cheap.
         Thread { pruneCrashFiles() }.start()
         RxManager.Builder.initAppContext(this)
+        // penbrush reads its context from here (PenUtils static init, NeoPencilPen); without it the
+        // first stroke render throws UninitializedPropertyAccessException.
+        ResManager.init(this)
         checkHiddenApiBypass()
         Log.i("NotableApp", "onCreate FINISH")
     }
 
     private fun checkHiddenApiBypass() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            HiddenApiBypass.addHiddenApiExemptions("")
+            HiddenApiBypass.setHiddenApiExemptions("")
         }
     }
 

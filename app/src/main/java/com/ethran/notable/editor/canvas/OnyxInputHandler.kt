@@ -44,6 +44,7 @@ import com.onyx.android.sdk.pen.data.TouchPointList
 import io.shipbook.shipbooksdk.ShipBook
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -346,33 +347,47 @@ class OnyxInputHandler(
     private fun isSurfaceLive(): Boolean =
         drawCanvas.isAttachedToWindow && drawCanvas.holder.surface.isValid
 
+    /**
+     * Re-styles the native eraser track for the current eraser type. Must run when the type
+     * changes: the re-assert in onBeginRawErasing lands after the firmware has latched the style,
+     * so without this the first button-erase after switching would still use the old track.
+     * While the pen layer is off there is nothing to update; [enablePenLayer] applies it on resume.
+     */
+    fun updateEraserTrack() {
+        if (!toolbarState.isDrawing || appliedIsDrawing != true) return
+        enableNativeEraser(touchHelper, toolbarState.eraser)
+    }
+
+    private var surfaceSetupJob: Job? = null
+
     fun updateActiveSurface() {
-        // Takes at least 50ms on Note 4c,
-        // and I don't think that we need it immediately
+        // Takes at least 50ms on Note 4c, so bursts (toolbar change + surfaceCreated when the
+        // editor opens) are coalesced: a newer request cancels one that has not started yet.
         log.i("Update editable surface")
-        coroutineScope.launch {
-            if (!isSurfaceLive()) return@launch
+        surfaceSetupJob?.cancel()
+        surfaceSetupJob = coroutineScope.launch {
+            // Before surfaceCreated there is nothing to set up (no surface, possibly zero size);
+            // surfaceCreated calls this again once the surface exists.
+            if (!isSurfaceLive()) {
+                log.d("Surface not ready, skipping surface setup")
+                return@launch
+            }
             onSurfaceInit(drawCanvas)
             val toolbarHeight =
                 if (toolbarState.isToolbarOpen) convertDpToPixel(40.dp, drawCanvas.context).toInt() else 0
             penLayerLock.withLock {
-                setupSurface(
-                    drawCanvas,
-                    touchHelper,
-                    toolbarHeight
-                )
-                // setupSurface resets the framework stroke style to firmware defaults. Re-send the
-                // pen style here, inside the same coroutine and after the surface is armed: a caller
-                // that invokes updatePenAndStroke() right after updateActiveSurface() would otherwise
-                // race this launch and have its style overwritten.
-                updatePenAndStroke()
-                // Fork: setupSurface always leaves raw drawing on. With drawing off (open selection,
-                // menu, locked page) that is the stuck pen layer from PenLayerRules.kt — undo it.
-                if (!toolbarState.isDrawing) touchHelper?.setRawDrawingEnabled(false)
+                // setupSurface leaves the pen layer off (upstream 0.2.7). Armed here, inside the same
+                // coroutine and after the session is recreated: a caller that sets the pen style right
+                // after updateActiveSurface() would otherwise race this launch. Fork: with drawing off
+                // (open selection, menu, locked page) it stays off — see PenLayerRules.kt — and
+                // appliedIsDrawing says what the layer really is.
+                setupSurface(drawCanvas, touchHelper, toolbarHeight)
+                if (toolbarState.isDrawing) enablePenLayer()
                 appliedIsDrawing = toolbarState.isDrawing
             }
         }
     }
+
     private fun onRawDrawingList(plist: TouchPointList) {
         if (touchHelper == null) return
         // Raw drawing is off on a locked page; this only catches input that raced the switch.

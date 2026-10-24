@@ -62,6 +62,7 @@ data class AppSettings(
     val toolbarPageArrowsAdded: Boolean = false,
     // Fork: the front-light switch was put into the saved layout (ToolbarLayout.withFrontLight).
     val toolbarLightAdded: Boolean = false,
+    val uiScale: Float = 1.0f, // Scale factor for the entire UI
 
     // Gestures
     val doubleTapAction: GestureAction = GestureAction.Undo,
