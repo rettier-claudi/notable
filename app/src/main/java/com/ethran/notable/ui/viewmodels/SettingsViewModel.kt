@@ -52,7 +52,9 @@ data class SyncSettingsUiState(
     val syncLogs: List<SyncLogger.LogEntry> = emptyList(),
     val syncState: SyncState = SyncState.Idle,
     val showForceUploadConfirm: Boolean = false,
-    val showForceDownloadConfirm: Boolean = false
+    val showForceDownloadConfirm: Boolean = false,
+    /** Fork: a bridge token for ticket pages is stored (its value never reaches the UI). */
+    val brueckeTokenSaved: Boolean = false,
 ) {
     val credentialsDirty: Boolean
         get() = syncSettings.serverUrl != lastSavedSettings.serverUrl ||
@@ -70,7 +72,8 @@ class SettingsViewModel @Inject constructor(
     private val capabilityProbeService: CapabilityProbeService,
     private val snackDispatcher: SnackDispatcher,
     private val appEventBus: AppEventBus,
-    @param:ApplicationScope private val appScope: CoroutineScope
+    @param:ApplicationScope private val appScope: CoroutineScope,
+    private val brueckeTokenStore: com.ethran.notable.tickets.BrueckeTokenStore,
 ) : ViewModel() {
 
     // We use the GlobalAppSettings object directly.
@@ -103,11 +106,13 @@ class SettingsViewModel @Inject constructor(
             val persisted = kvProxy.getSyncSettings()
             val hasPassword = persisted.password.isNotEmpty()
             val uiSettings = persisted.copy(password = "")
+            val tokenSaved = brueckeTokenStore.isSaved()
             withContext(Dispatchers.Main) {
                 syncUiState = syncUiState.copy(
                     syncSettings = uiSettings,
                     lastSavedSettings = uiSettings,
-                    isPasswordSaved = hasPassword
+                    isPasswordSaved = hasPassword,
+                    brueckeTokenSaved = tokenSaved,
                 )
             }
         }
@@ -191,6 +196,21 @@ class SettingsViewModel @Inject constructor(
                     duration = 3000
                 )
             )
+        }
+    }
+
+    /** Fork: stores the bridge token encrypted; blank removes it. */
+    fun onSaveBrueckeToken(token: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val text = try {
+                brueckeTokenStore.set(token)
+                val saved = token.isNotBlank()
+                withContext(Dispatchers.Main) { syncUiState = syncUiState.copy(brueckeTokenSaved = saved) }
+                if (saved) "Bridge token saved" else "Bridge token removed"
+            } catch (e: Exception) {
+                "Failed to save bridge token: ${e.message}"
+            }
+            snackDispatcher.showOrUpdateSnack(SnackConf(text = text, duration = 3000))
         }
     }
 

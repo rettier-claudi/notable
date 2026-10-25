@@ -91,6 +91,26 @@ class CanvasObserverRegistry(
         observeSaveCurrent()
         observeQuickNav()
         observeRestoreCanvas()
+        observeTicketLabels()
+    }
+
+    // Fork: a bridge answer next to a ticket row appeared -- repaint that row band (full width,
+    // so a label pushed left by the page edge is covered too).
+    private fun observeTicketLabels() {
+        observerScope.launch {
+            com.ethran.notable.tickets.TicketLabels.changes.collect { (pageId, row) ->
+                if (pageId != page.currentPageId) return@collect
+                val zoom = page.zoomLevel.value
+                val left = page.scroll.x
+                val area = Rect(
+                    left.toInt(),
+                    (row.y1 - 8f).toInt(),
+                    (left + page.viewWidth / zoom).toInt() + 1,
+                    (row.y2 + 8f).toInt()
+                )
+                CanvasEventBus.forceUpdate.emit(page.toScreenCoordinates(area))
+            }
+        }
     }
 
     // Last (scroll, zoom) actually pushed by an immediate refresh. Used to drop redundant

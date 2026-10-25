@@ -16,6 +16,7 @@ Die Brücke auf mike verlässt sich darauf. Bricht etwas davon, gehen Seiten ver
 - **Schnellseiten** werden gesynct, nie auf Verdacht gelöscht, gesendete sind von der Löschbremse ausgenommen; eine Schnellseite mit Seite 2 wird ein Notizbuch `kind=scratch` mit derselben Id (claudi.24, `MOVED_QUICK_PAGES`).
 - **Leere neue Seite** synct nie und verschwindet beim Schließen (claudi.16).
 - **Fehlgeschlagener erster Download** zählt nicht als gesynct, sonst würde das Buch per Grabstein gelöscht (claudi.29).
+- **Ticket-Seiten** (claudi.34, `tickets/`): beim Öffnen `GET /gesten/<pageId>` (404 = normale Seite), nach 1 s Stiftruhe Haken/Kreis/Linie/Ampel erkennen, `POST /geste` mit `pageId`, `strokeIds`, `ticket`, `aktion`, `wert` (nur stage/guertel), Kopf `X-Bruecke-Token`; Antwort `anzeige` grau neben der Zeile, nur Overlay. Warteschlange `TICKET_GESTURE_QUEUE`. Rot nie. Vertrag: tablet-bruecke `docs/ticket-seiten.md`. Einstellungen: `SyncSettings.brueckeUrl`, Token verschlüsselt in KV `BRUECKE_TOKEN`. Tests: `TicketGesture*Test`, `BrueckeClientTest`. ⚠ `handleDraw` gibt den Strich zurück, `OnyxInputHandler.onTicketStroke`, `drawOnCanvasFromPage` zeichnet `TicketLabels`
 
 ## 2. Stift und Radieren
 

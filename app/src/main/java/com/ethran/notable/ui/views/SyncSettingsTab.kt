@@ -96,6 +96,8 @@ data class SyncSettingsCallbacks(
     val onCancelSync: () -> Unit = {},
     val onClearSyncLogs: () -> Unit = {},
     val danger: SyncDangerCallbacks = SyncDangerCallbacks(),
+    /** Fork: store the ticket-page bridge token (blank removes it). */
+    val onSaveBrueckeToken: (String) -> Unit = {},
 )
 
 private val EInkFieldShape = RoundedCornerShape(4.dp)
@@ -171,7 +173,11 @@ fun SyncSettings(
         if (isConfigured) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            SyncBehaviorSection(state = state, onUpdate = callbacks.onUpdateSyncSettings)
+            SyncBehaviorSection(
+                state = state,
+                onUpdate = callbacks.onUpdateSyncSettings,
+                onSaveBrueckeToken = callbacks.onSaveBrueckeToken,
+            )
 
             if (state.syncSettings.syncEnabled) {
                 Spacer(modifier = Modifier.height(24.dp))
@@ -340,6 +346,7 @@ private fun CapabilityCheckRow(label: String, ok: Boolean) {
 private fun SyncBehaviorSection(
     state: SyncSettingsUiState,
     onUpdate: (SyncSettings, Boolean) -> Unit,
+    onSaveBrueckeToken: (String) -> Unit = {},
 ) {
     EInkSection(
         title = stringResource(R.string.sync_behavior_title),
@@ -429,6 +436,13 @@ private fun SyncBehaviorSection(
                 style = MaterialTheme.typography.caption,
                 color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            BrueckeFields(
+                url = state.syncSettings.brueckeUrl,
+                tokenSaved = state.brueckeTokenSaved,
+                onUrlChange = { onUpdate(state.syncSettings.copy(brueckeUrl = it), true) },
+                onSaveToken = onSaveBrueckeToken,
             )
             SettingToggleRow(
                 label = stringResource(R.string.sync_fast_sync_label),
@@ -750,6 +764,97 @@ fun SyncCredentialFields(
             }
         }
     }
+}
+
+/**
+ * Fork: ticket pages -- bridge URL (saved as typed, like the notify URL) and bridge token (typed
+ * here, saved encrypted on "Save token", never shown again; see BrueckeTokenStore).
+ */
+@Composable
+private fun BrueckeFields(
+    url: String,
+    tokenSaved: Boolean,
+    onUrlChange: (String) -> Unit,
+    onSaveToken: (String) -> Unit,
+) {
+    EInkTextField(
+        label = stringResource(R.string.bruecke_url_label),
+        value = url,
+        onValueChange = onUrlChange,
+        placeholder = "https://tablet.example/bruecke"
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    var token by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+    Text(
+        text = stringResource(R.string.bruecke_token_label),
+        style = MaterialTheme.typography.caption,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colors.onSurface
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colors.surface, EInkFieldShape)
+            .border(EInkFieldBorderWidth, MaterialTheme.colors.onSurface, EInkFieldShape)
+            .padding(start = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) {
+                if (token.isEmpty() && tokenSaved) {
+                    Text(
+                        text = stringResource(R.string.sync_password_unchanged),
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                    )
+                }
+                BasicTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colors.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colors.onSurface),
+                    singleLine = true,
+                    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            }
+            IconButton(onClick = { visible = !visible }) {
+                Icon(
+                    if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        EInkActionButton(
+            text = stringResource(R.string.bruecke_token_save),
+            onClick = { onSaveToken(token); token = "" },
+            enabled = token.isNotBlank(),
+            modifier = Modifier.weight(1f),
+        )
+        EInkActionButton(
+            text = stringResource(R.string.bruecke_token_remove),
+            onClick = { onSaveToken(""); token = "" },
+            enabled = tokenSaved,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Text(
+        text = stringResource(R.string.bruecke_hint),
+        style = MaterialTheme.typography.caption,
+        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp, start = 4.dp, end = 4.dp)
+    )
 }
 
 @Composable

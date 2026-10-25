@@ -60,6 +60,41 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Ticket pages: gestures go straight to the bridge** (v0.2.7-claudi.34). The tablet bridge
+  prints KD tickets from YouTrack as pages (spec: tablet-bruecke `docs/ticket-seiten.md`). When a
+  page opens, the app asks the bridge for its gesture layout (`GET <bridge>/gesten/<pageId>`,
+  header `X-Bruecke-Token`; 404 = ordinary page, any error = nothing happens). One second after
+  the pen last lifted, the strokes drawn since are checked (`TicketGestureGeometry`, page
+  coordinates, the same unit as the stroke points) for the four gestures the tablet can tell
+  apart on its own:
+  - *tick in the box* → `weiter`: ≥ 85 % of the points within the box plus 40 % of its side
+    (Philipp's real ticks overshoot the 46 px box by 10–25 px), at most 2.2 sides and at least
+    0.4 side wide and high, ink in the box itself ≥ 0.8 side; up to three strokes (a cross).
+    Not when a non-gesture stroke sits right beside it at the same height in the same batch —
+    then it is the first letter of a word;
+  - *loop around one stage / belt symbol* → `stage` / `guertel` with its `wert`: the pen travels
+    ≥ 320° around exactly one symbol's centre (one or two strokes), never closer to it than 0.3 of
+    its size, the loop 0.7–4 symbols big, path 0.75–2.4 times its ellipse;
+  - *black line through ≥ 60 % of the row* → `dropped`: one straight stroke (path ≤ 1.2 × chord),
+    90 % within the row band, flat, centred in the row (underlining doesn't count);
+  - *short stroke through the traffic light* → `ampel`: straight-ish, wholly near the light,
+    0.6–2.6 times its size, through its inner part.
+  Red strokes never count (deleting is the server's), nor the highlighter; a cluster that fits two
+  rules or two places gives nothing — the bridge reads every stroke at the next sync anyway. Each
+  gesture is POSTed to `<bridge>/geste` with its stroke ids; the answer's `anzeige` appears small
+  and grey right of the row (`TicketLabels`, an overlay drawn after the strokes: no stroke, not
+  saved, not synced, gone with the process). "…" while sending, "⟳" while it waits (offline / 5xx:
+  KV queue `TICKET_GESTURE_QUEUE`, survives restarts, retried after 30 s … 15 min and on every page
+  open — harmless, the bridge is idempotent over the stroke ids), "✗ Token" when the token is
+  refused. A second tick in the same box within 5 s is left to the bridge (one mark in two goes).
+  *Settings → Sync → Bridge URL / Bridge token*; the token is stored encrypted like the sync
+  password, in its own KV row (`BrueckeTokenStore`). Tests: `TicketGestureGeometryTest`
+  (synthetic), `TicketGestureRealStrokesTest` (175 real ticks and strike-throughs from the
+  bridge's task pages in `ticket-haken-echt.txt.gz`: 139 ticks and 9 lines recognised, nothing
+  else; the set with all of Philipp's handwriting stays outside the public repo, on spathi in
+  `/workspace/data/notable-testdaten/` — over a ticket grid on every line it gives no loop, line or
+  light, and only box marks), `BrueckeClientTest` (contract against a local HTTP server). Untested
+  on the device at release.
 - **Upstream v0.2.7 merged** (v0.2.7-claudi.33). Brings upstream's Onyx SDK bump (pen 1.5.8,
   base 1.8.9, device 1.3.6), page-lifecycle fixes (each editor owns its page, no double loads,
   cancelled loads clean up only their own entry), 20 undo steps with a 150 ms history debounce,

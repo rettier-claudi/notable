@@ -118,6 +118,7 @@ fun SettingsView(
             onManualSync = viewModel::onManualSync,
             onCancelSync = viewModel::onCancelSync,
             onClearSyncLogs = viewModel::onClearSyncLogs,
+            onSaveBrueckeToken = viewModel::onSaveBrueckeToken,
             danger = SyncDangerCallbacks(
                 onForceUploadRequested = viewModel::onForceUploadRequested,
                 onForceDownloadRequested = viewModel::onForceDownloadRequested,
