@@ -60,6 +60,16 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **Ticket pages in a row of their own** (v0.2.7-claudi.37). The bridge marks its YouTrack ticket
+  pages with `"kind": "tickets"` in the manifest (same top-level field as `"kind": "scratch"`, stored and
+  written back verbatim since claudi.9). The home screen takes notebooks with that kind out of the
+  *Notebooks* grid and shows them in a row *Tickets* at the very bottom; the grid takes the space in
+  between, so the row stays on screen. Ordered by title, descending (stable across reprints, which give a
+  page a new id): 🥇 番付 · 🏯 天守閣 · ⚔️ 稽古場 — the order of the spec. A ticket notebook without pages stays
+  in the grid (empty warning). The row only appears where there are such notebooks — the bridge keeps them
+  in the Workspace. Tap/long-press/conflict as in the grid (`LibraryNotebookCard`, shared). Code:
+  `splitTicketNotebooks` in `Notebook.kt`, `LibraryUiState.ticketBooks`, `HomeView`. Tests:
+  `NotebookKindTest`, `NotebookSerializerTest`.
 - **A tombstone never deletes unsynced strokes** (v0.2.7-claudi.36). Upstream deletes a local
   notebook on a server tombstone unless it was edited *after* the deletion. Strokes drawn before
   it but never uploaded (the app uploads when the notebook closes) died with it: on 25.10.2026 the

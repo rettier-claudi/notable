@@ -2,6 +2,7 @@
     <string name="app_name" translatable="false">Notable</string>
     <string name="home_quick_pages">Scratch notes</string>
     <string name="home_notebooks">Notebooks</string>
+    <string name="home_tickets">Tickets</string>
     <string name="home_add_new_folder">Add new folder</string>
     <string name="home_new_folder">New Folder</string>
     <string name="home_view_name">Library</string>

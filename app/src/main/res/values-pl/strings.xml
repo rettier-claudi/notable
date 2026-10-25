@@ -2,6 +2,7 @@
 <resources>
     <string name="home_quick_pages">Szybkie notatki</string>
     <string name="home_notebooks">Zeszyty</string>
+    <string name="home_tickets">Zgłoszenia</string>
     <string name="home_add_new_folder">Dodaj nowy folder</string>
     <string name="home_new_folder">Nowy folder</string>
     <string name="home_view_name">Biblioteka</string>
