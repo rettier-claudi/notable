@@ -86,8 +86,45 @@ class BrueckeClient(
         }
     }
 
+    /**
+     * `POST /aktiv` (bridge since 25.10.2026): the strokes of one batch on a ticket page, gesture or
+     * not. While the bridge knows of strokes the server does not have yet (the app uploads only when
+     * the notebook is closed), it does not replace the page — its tombstone would delete them here.
+     * Fire and forget: true if the bridge took it.
+     */
+    fun postActivity(baseUrl: String, token: String, pageId: String, strokes: List<com.ethran.notable.data.db.Stroke>): Boolean {
+        val url = endpoint(baseUrl, "aktiv") ?: return false
+        val request = Request.Builder().url(url).header(TOKEN_HEADER, token)
+            .post(activityBody(pageId, strokes).toRequestBody(JSON)).build()
+        return try {
+            http.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: IOException) {
+            false
+        }
+    }
+
     companion object {
         const val TOKEN_HEADER = "X-Bruecke-Token"
+
+        /** Body of `POST /aktiv`: page, and per stroke its id and points (whole px). */
+        fun activityBody(pageId: String, strokes: List<com.ethran.notable.data.db.Stroke>): String = buildJsonObject {
+            put("pageId", pageId)
+            putJsonArray("striche") {
+                strokes.forEach { s ->
+                    add(buildJsonObject {
+                        put("id", s.id)
+                        putJsonArray("punkte") {
+                            s.points.forEach { p ->
+                                add(kotlinx.serialization.json.buildJsonArray {
+                                    add(kotlin.math.round(p.x).toInt())
+                                    add(kotlin.math.round(p.y).toInt())
+                                })
+                            }
+                        }
+                    })
+                }
+            }
+        }.toString()
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         /** `<base>/<segments…>`, each segment path-encoded; null for an unusable base URL. */

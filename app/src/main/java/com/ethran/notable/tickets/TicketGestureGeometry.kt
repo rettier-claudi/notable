@@ -68,6 +68,14 @@ object TicketGestureGeometry {
     /** Path length relative to the loop's ellipse: one or two rounds, not a word with loops. */
     const val KREIS_WEG_MIN = 0.75f
     const val KREIS_WEG_MAX = 2.4f
+    // Philipp's loops are 60–110 px (real ones from his notes, 25.10.: 375–400° round, path ≈ the
+    // ellipse), the bridge's symbols 64 px on a 68 px pitch. A loop a little off-centre therefore also
+    // runs round the neighbour's centre. Then the symbol nearest to the loop's centre wins, if it is
+    // clearly nearer than the next one and the loop's centre lies on it.
+    /** Nearest enclosed symbol at most this share of the distance to the second one … */
+    const val KREIS_KLAR = 0.6f
+    /** … and the loop's centre within this share of the symbol's size from its centre. */
+    const val KREIS_MITTE = 0.6f
 
     // ---- Line through the row -----------------------------------------------------------------
     // Philipp's strike-through lines on bridge rows (70 px high): 9–49 px high, path/chord 1.01–1.06,
@@ -105,15 +113,44 @@ object TicketGestureGeometry {
         val usable = strokes.filter { usable(it) }
         if (usable.isEmpty() || layout.regionen.isEmpty()) return emptyList()
         val groups = clusters(usable)
-        val found = groups.map { c ->
-            (tick(c, layout) + loop(c, layout) + line(c, layout) + light(c, layout)).singleOrNull()
+        val found: List<List<TicketGesture>> = groups.map { c ->
+            // Several loops drawn in one go (pen rest shorter than the debounce) whose rings touch —
+            // stages of two tickets one above the other — form one cluster: each loop on its own.
+            loops(c, layout)?.takeIf { it.size >= 2 }
+                ?: listOfNotNull((tick(c, layout) + loop(c, layout) + line(c, layout) + light(c, layout)).singleOrNull())
+                    .ifEmpty { loops(c, layout).orEmpty() }
         }
         // Strokes that are no gesture themselves: possibly writing.
-        val other = groups.filterIndexed { i, _ -> found[i] == null }.flatten()
-        return groups.indices.mapNotNull { i ->
-            val g = found[i] ?: return@mapNotNull null
-            if (g.action == GestureAction.WEITER && writingBeside(boundsOf(groups[i]), other)) null else g
+        val other = groups.filterIndexed { i, _ -> found[i].isEmpty() }.flatten()
+        return groups.indices.flatMap { i ->
+            found[i].filterNot { g -> g.action == GestureAction.WEITER && writingBeside(boundsOf(groups[i]), other) }
         }
+    }
+
+    /**
+     * A cluster of two or more strokes read as separate loops, in drawing order: each stroke on its
+     * own, or with the next one (a loop in two halves). Only if **every** stroke is part of a loop and
+     * no symbol is hit twice — a cluster with one stroke that is no loop is writing, and stays the
+     * server's.
+     */
+    internal fun loops(c: List<Stroke>, layout: TicketLayout): List<TicketGesture>? {
+        if (c.size < 2) return null
+        val out = mutableListOf<TicketGesture>()
+        var i = 0
+        while (i < c.size) {
+            val one = loop(listOf(c[i]), layout).singleOrNull()
+            if (one != null) {
+                out += one
+                i++
+                continue
+            }
+            val two = if (i + 1 < c.size && loop(listOf(c[i + 1]), layout).isEmpty()) {
+                loop(listOf(c[i], c[i + 1]), layout).singleOrNull()
+            } else null
+            out += two ?: return null
+            i += 2
+        }
+        return out.takeIf { o -> o.map { it.region }.distinct().size == o.size }
     }
 
     /**
@@ -195,9 +232,9 @@ object TicketGestureGeometry {
         val enclosed = symbols.filter { s ->
             abs(c.sumOf { sweptDegrees(it, s.box.cx, s.box.cy).toDouble() }) >= KREIS_WINKEL_GRAD
         }
-        val s = enclosed.singleOrNull() ?: return emptyList()
-        val all = c.flatMap { it.points }
         val bb = boundsOf(c)
+        val s = target(enclosed, bb) ?: return emptyList()
+        val all = c.flatMap { it.points }
         val size = max(s.box.w, s.box.h)
         if (bb.w < KREIS_MIN * s.box.w || bb.h < KREIS_MIN * s.box.h) return emptyList()
         if (bb.w > KREIS_MAX * size || bb.h > KREIS_MAX * size) return emptyList()
@@ -208,6 +245,21 @@ object TicketGestureGeometry {
         if (path < KREIS_WEG_MIN * ellipse || path > KREIS_WEG_MAX * ellipse) return emptyList()
         val action = if (s.art == RegionArt.STAGE) GestureAction.STAGE else GestureAction.GUERTEL
         return listOf(TicketGesture(s.ticket, action, s.wert, c.map { it.id }, s))
+    }
+
+    /**
+     * Which of the [enclosed] symbols a loop with bounds [bb] means: the only one, or the one nearest
+     * to the loop's centre if that is clearly nearer than the next ([KREIS_KLAR]) and the centre lies
+     * on it ([KREIS_MITTE]). Otherwise none.
+     */
+    internal fun target(enclosed: List<Region>, bb: Box): Region? {
+        if (enclosed.size <= 1) return enclosed.singleOrNull()
+        fun dist(r: Region) = hypot(r.box.cx - bb.cx, r.box.cy - bb.cy)
+        val sorted = enclosed.sortedBy { dist(it) }
+        val near = sorted[0]
+        if (dist(near) > KREIS_KLAR * dist(sorted[1])) return null
+        if (dist(near) > KREIS_MITTE * min(near.box.w, near.box.h)) return null
+        return near
     }
 
     private fun line(c: List<Stroke>, layout: TicketLayout): List<TicketGesture> {

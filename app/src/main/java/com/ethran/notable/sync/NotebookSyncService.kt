@@ -126,25 +126,24 @@ class NotebookSyncService @Inject constructor(
                     val deletedAt = tombstone.lastModified
                     val localNotebook = appRepository.bookRepository.getById(notebookId) ?: continue
 
-                    if (deletedAt != null) {
-                        // Dated tombstone: keep the local copy if it was edited after the deletion.
-                        if (localNotebook.updatedAt.after(deletedAt)) {
-                            log.i(
-                                TAG,
-                                "↻ Resurrecting '${localNotebook.title}' (modified after server deletion)"
-                            )
+                    val syncRow = appRepository.notebookSyncStateRepository.get(notebookId)
+                    when (
+                        tombstoneVerdict(localNotebook.updatedAt, deletedAt, syncRow?.syncedLocalUpdatedAt)
+                    ) {
+                        TombstoneVerdict.KEEP_EDITED_AFTER -> {
+                            log.i(TAG, "↻ Resurrecting '${localNotebook.title}' (modified after server deletion)")
                             continue
                         }
-                    } else if (hasUnsyncedLocalEdits(notebookId, localNotebook)) {
-                        // Undated tombstone (server omitted Last-Modified): we cannot prove the local
-                        // copy predates the deletion, so deleting it could drop work edited after
-                        // another device removed the notebook. Only delete a clean copy; keep one with
-                        // unsynced edits until a dated tombstone arrives or the user resolves it.
-                        log.i(
-                            TAG,
-                            "↻ Keeping '${localNotebook.title}': undated tombstone but local has unsynced edits"
-                        )
-                        continue
+                        TombstoneVerdict.KEEP_UNSYNCED -> {
+                            // Edits that never reached the server (the notebook was open, nothing closed
+                            // it yet) must not die with a deletion made elsewhere in the meantime —
+                            // 25.10.2026 the tablet bridge replaced a ticket page while Philipp was still
+                            // drawing on it, and the next sync deleted his strokes. Keep it; the normal
+                            // upload puts it back and removes the tombstone (resurrection, 5.7).
+                            log.i(TAG, "↻ Keeping '${localNotebook.title}': deleted on the server, but local has unsynced edits")
+                            continue
+                        }
+                        TombstoneVerdict.DELETE -> Unit
                     }
 
                     log.i(
@@ -180,18 +179,6 @@ class NotebookSyncService @Inject constructor(
 
             errors.asResult(RemoteTombstones(tombstonedIds, folderTombstones))
         }
-    }
-
-    /**
-     * Whether [notebook] carries local edits not yet committed to the server: its current `updatedAt`
-     * is meaningfully newer than the anchor recorded at its last sync. A missing sync-state row counts
-     * as unsynced — with no proof the local copy was ever pushed, an undated tombstone must not delete
-     * a notebook whose provenance we cannot establish.
-     */
-    private suspend fun hasUnsyncedLocalEdits(notebookId: String, notebook: Notebook): Boolean {
-        val syncRow = appRepository.notebookSyncStateRepository.get(notebookId) ?: return true
-        return notebook.updatedAt.time - syncRow.syncedLocalUpdatedAt.time >
-            NotebookSyncPlanner.TOLERANCE_MS
     }
 
     /**
@@ -1453,3 +1440,19 @@ data class RemoteTombstones(
     /** Folder id -> server `Last-Modified` of its tombstone (null if the server omitted it). */
     val folders: Map<String, Date?>,
 )
+
+
+internal enum class TombstoneVerdict { DELETE, KEEP_EDITED_AFTER, KEEP_UNSYNCED }
+
+/**
+ * What a notebook tombstone does to the local copy (5.7). Kept: a copy edited after the deletion,
+ * and — fork, 25.10.2026 — any copy with edits that were never uploaded ([syncedLocalUpdatedAt] is
+ * the local `updatedAt` at the last successful sync; null = never synced), whether the tombstone is
+ * dated or not. Only a clean copy is deleted.
+ */
+internal fun tombstoneVerdict(localUpdatedAt: Date, deletedAt: Date?, syncedLocalUpdatedAt: Date?): TombstoneVerdict {
+    if (deletedAt != null && localUpdatedAt.after(deletedAt)) return TombstoneVerdict.KEEP_EDITED_AFTER
+    val unsynced = syncedLocalUpdatedAt == null ||
+        localUpdatedAt.time - syncedLocalUpdatedAt.time > NotebookSyncPlanner.TOLERANCE_MS
+    return if (unsynced) TombstoneVerdict.KEEP_UNSYNCED else TombstoneVerdict.DELETE
+}

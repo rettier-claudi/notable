@@ -42,6 +42,7 @@ class BrueckeClientTest {
                 ex.requestURI.path.startsWith("/bruecke/gesten/") ->
                     if (layoutStatus == 200) 200 to layoutJson else layoutStatus to "nope"
                 ex.requestURI.path == "/bruecke/geste" -> postStatus to postBody
+                ex.requestURI.path == "/bruecke/aktiv" -> 200 to """{"ok": true}"""
                 else -> 404 to ""
             }
             val bytes = text.toByteArray()
@@ -87,6 +88,19 @@ class BrueckeClientTest {
         assertTrue(client.getLayout(base, "t", "p1") is LayoutResult.Failed)
         server.stop(0)
         assertTrue("offline", client.getLayout(base, "t", "p1") is LayoutResult.Failed)
+        start()
+    }
+
+    @Test
+    fun `activity carries the strokes with whole-pixel points`() {
+        val s = stroke(10.4f to 20.6f, 12f to 22f, id = "w1", step = 100f)
+        assertTrue(client.postActivity(base, "geheim", "p1", listOf(s)))
+        val (what, token, body) = requests.single()
+        assertEquals("POST /bruecke/aktiv", what)
+        assertEquals("geheim", token)
+        assertEquals("""{"pageId":"p1","striche":[{"id":"w1","punkte":[[10,21],[12,22]]}]}""", body)
+        server.stop(0)
+        assertTrue("offline is no error, just false", !client.postActivity(base, "geheim", "p1", listOf(s)))
         start()
     }
 

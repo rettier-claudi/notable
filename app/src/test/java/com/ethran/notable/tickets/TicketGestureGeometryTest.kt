@@ -124,6 +124,78 @@ class TicketGestureGeometryTest {
         none("huge loop round the whole bar", loop(1340f + 190f, 435f, 230f, 45f))
     }
 
+    // ---- 25.10.2026: Philipp's circles on the real Keiko-ba page, "only one was recognised" ------
+    // Real layout: cells 64 px on a 68 px pitch, rows 80 px. KD-151 on y 400, KD-152 on 480, KD-153 on 560.
+
+    private val keiko = layoutOf(keikobaRow("KD-151", 400f), keikobaRow("KD-152", 480f), keikobaRow("KD-153", 560f))
+
+    /** Centre of stage [i] in the row on [y]. */
+    private fun cell(i: Int, y: Float) = (1336f + i * 68f + 32f) to (y + 36f)
+
+    @Test
+    fun `a loop a little off-centre that also rounds the neighbour's centre still counts`() {
+        // 90 px loop, 18 px right of 🥋: its ring also runs round the centre of 🧐 (68 px away).
+        val (cx, cy) = cell(1, 480f)
+        val g = TicketGestureGeometry.recognize(listOf(loop(cx + 18f, cy, 45f, 42f)), keiko)
+        assertEquals(1, g.size)
+        assertEquals("KD-152", g.single().ticket)
+        assertEquals("🥋 稽古", g.single().wert)
+    }
+
+    @Test
+    fun `loops in rows one above the other, drawn in one go, each count`() {
+        // Pen rest between them shorter than the debounce: one batch, and the rings touch (one cluster).
+        val (x1, y1) = cell(2, 400f)
+        val (x2, y2) = cell(1, 480f)
+        val (x3, y3) = cell(4, 560f)
+        val strokes = listOf(
+            loop(x1, y1, 44f, 46f, id = "l1"),
+            loop(x2 + 4f, y2 + 3f, 46f, 47f, id = "l2"),
+            loop(x3, y3 - 2f, 45f, 46f, id = "l3"),
+        )
+        assertEquals("the first two rings touch: one cluster", 2, TicketGestureGeometry.clusters(strokes).size)
+        val g = TicketGestureGeometry.recognize(strokes, keiko)
+        assertEquals(
+            listOf("KD-151 🧐 審査 [l1]", "KD-152 🥋 稽古 [l2]", "KD-153 ⚔️ 抜刀 [l3]"),
+            g.map { "${it.ticket} ${it.wert} ${it.strokeIds}" },
+        )
+    }
+
+    @Test
+    fun `two loops in one batch, one of them in two halves`() {
+        val (x1, y1) = cell(0, 400f)
+        val (x2, y2) = cell(3, 480f)
+        val full = loop(x2, y2, 44f, 44f, turns = 1.05f)
+        val half = full.points.size / 2
+        val a = strokeOf(full.points.take(half + 1).map { it.x to it.y }, id = "a")
+        val b = strokeOf(full.points.drop(half).map { it.x to it.y }, id = "b")
+        val g = TicketGestureGeometry.recognize(listOf(loop(x1, y1, 44f, 46f, id = "l1"), a, b), keiko)
+        assertEquals(
+            listOf("KD-151 📜 巻物 [l1]", "KD-152 🧘 構え [a, b]"),
+            g.map { "${it.ticket} ${it.wert} ${it.strokeIds}" },
+        )
+    }
+
+    @Test
+    fun `a batch of loops with writing in it stays the server's`() {
+        val (x1, y1) = cell(2, 400f)
+        val (x2, y2) = cell(1, 480f)
+        // A word written right through both rings: the cluster is not only loops.
+        val word = stroke((x1 - 60f) to (y1 + 30f), (x1 - 20f) to (y2 - 10f), x2 to (y2 + 20f), (x2 + 60f) to (y1 + 20f))
+        val g = TicketGestureGeometry.recognize(listOf(loop(x1, y1, 44f, 46f), word, loop(x2, y2, 46f, 47f)), keiko)
+        assertTrue("nothing: $g", g.isEmpty())
+    }
+
+    @Test
+    fun `a loop right between two cells is still no choice`() {
+        val (cx, cy) = cell(2, 480f)
+        none2("between 🧐 and 🧘", loop(cx + 34f, cy, 60f, 44f))
+        none2("between two rows", loop(cx, cy + 40f, 44f, 60f))
+    }
+
+    private fun none2(message: String, vararg strokes: com.ethran.notable.data.db.Stroke) =
+        assertEquals(message, emptyList<TicketGesture>(), TicketGestureGeometry.recognize(strokes.toList(), keiko))
+
     @Test
     fun `scribbling over a symbol is no loop`() {
         // Passes through the symbol's centre.

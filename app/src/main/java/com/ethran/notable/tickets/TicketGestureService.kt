@@ -112,6 +112,7 @@ class TicketGestureService @Inject constructor(
         val ids = batch.map { it.id }.filterNot { it in handled }
         if (ids.isEmpty()) return
         val present = runCatching { lookup(ids).filterNotNull() }.getOrElse { emptyList() }
+        if (present.isNotEmpty()) reportActivity(pageId, present)
         val gestures = TicketGestureGeometry.recognize(present, layout)
         if (gestures.isEmpty()) return
         val now = System.currentTimeMillis()
@@ -142,6 +143,16 @@ class TicketGestureService @Inject constructor(
         log.i("Gestures on $pageId: ${items.joinToString { "${it.ticket} ${it.aktion} ${it.wert ?: ""}" }}")
         withQueue { q -> items.forEach { item -> if (q.none { it.key == item.key }) q.add(item) } }
         flush()
+    }
+
+    /** Tells the bridge that this page is being written on (it must not replace it meanwhile). */
+    private fun reportActivity(pageId: String, strokes: List<Stroke>) {
+        scope.launch(Dispatchers.IO) {
+            val cfg = config() ?: return@launch
+            if (!client.postActivity(cfg.url, cfg.token, pageId, strokes)) {
+                log.i("Activity on $pageId not delivered (bridge offline or older than 25.10.)")
+            }
+        }
     }
 
     /** Sends the queue in order; stops at the first item that has to wait (offline, bad token). */

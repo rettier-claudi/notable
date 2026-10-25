@@ -86,6 +86,23 @@ fun ticketRow(ticket: String, y: Float, belt: Boolean = false): List<Region> {
     return r
 }
 
+/**
+ * A row as the bridge really prints Keiko-ba (25.10.2026, page 9e48000e): 80 px rows, stage cells
+ * 64 px on a 68 px pitch from x 1336, y + 4 .. y + 68.
+ */
+fun keikobaRow(ticket: String, y: Float): List<Region> {
+    val r = mutableListOf(
+        region(ticket, RegionArt.ZEILE, 120, y, 1740, y + 80),
+        region(ticket, RegionArt.KASTEN, 120, y + 24, 166, y + 70),
+        region(ticket, RegionArt.AMPEL, 173, y + 17, 225, y + 77),
+    )
+    STAGES.forEachIndexed { i, v ->
+        val x = 1336f + i * 68f
+        r += region(ticket, RegionArt.STAGE, x, y + 4, x + 64, y + 68, v)
+    }
+    return r
+}
+
 fun layoutOf(vararg rows: List<Region>) = TicketLayout("page", "keikoba", null, rows.flatMap { it })
 
 // ---- real strokes (format: see the header of the resource) ------------------------------------

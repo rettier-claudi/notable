@@ -60,6 +60,23 @@ Personal fork for a Boox Note Air 5C that is one end of a WebDAV bridge (the oth
 notebooks on the server). Everything below is on top of upstream `main`; upstream is tracked as
 the `upstream` remote and merged in as it moves.
 
+- **A tombstone never deletes unsynced strokes** (v0.2.7-claudi.36). Upstream deletes a local
+  notebook on a server tombstone unless it was edited *after* the deletion. Strokes drawn before
+  it but never uploaded (the app uploads when the notebook closes) died with it: on 25.10.2026 the
+  bridge replaced a ticket page while Philipp was still drawing on it, and the next sync deleted
+  the notebook and his strokes. Now a notebook with any edit since its last sync is kept and
+  uploaded again (resurrection, sync doc 5.7); only a clean copy goes (`tombstoneVerdict`). A
+  stroke saved onto a page a sync has meanwhile deleted now says so ("This page was deleted by a
+  sync …") instead of "Attempted to create strokes that already exist" — the foreign key, not a
+  duplicate id, was what refused it, and the fallback `update` silently changed nothing.
+- **Ticket pages: loops as the bridge reads them, activity reported** (v0.2.7-claudi.36). A loop
+  that also runs round the centre of the neighbouring symbol (cells 64 px on a 68 px pitch,
+  Philipp's loops 60–110 px) counts for the symbol clearly nearest to its centre; several loops
+  in one batch whose rings touch (rows one above the other) count one by one. Client and bridge
+  use the same geometry (bridge `tickets.kreis`, checked placement by placement against
+  Philipp's real loops in `TicketLoopRealTest`). After every batch on a ticket page the app sends
+  `POST <bridge>/aktiv` with the stroke ids and points, so the bridge does not replace a page
+  that is being written on.
 - **Ticket pages: gestures go straight to the bridge** (v0.2.7-claudi.34). The tablet bridge
   prints KD tickets from YouTrack as pages (spec: tablet-bruecke `docs/ticket-seiten.md`). When a
   page opens, the app asks the bridge for its gesture layout (`GET <bridge>/gesten/<pageId>`,
