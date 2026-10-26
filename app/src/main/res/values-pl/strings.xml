@@ -2,6 +2,7 @@
 <resources>
     <string name="home_quick_pages">Szybkie notatki</string>
     <string name="home_notebooks">Zeszyty</string>
+    <string name="home_tickets">Zgłoszenia</string>
     <string name="home_add_new_folder">Dodaj nowy folder</string>
     <string name="home_new_folder">Nowy folder</string>
     <string name="home_view_name">Biblioteka</string>
@@ -317,4 +318,9 @@
     <string name="gestures_hold_action">Przytrzymanie palcem</string>
     <string name="home_sync_no_password">Synchronizacja wstrzymana: brak hasła</string>
     <string name="home_sync_password_unreadable">Synchronizacja wstrzymana: nie można odczytać hasła</string>
+    <string name="bruecke_url_label">Adres mostu (strony zgłoszeń)</string>
+    <string name="bruecke_token_label">Token mostu</string>
+    <string name="bruecke_token_save">Zapisz token</string>
+    <string name="bruecke_token_remove">Usuń token</string>
+    <string name="bruecke_hint">Opcjonalne. Na stronie zgłoszeń mostu tabletu zaznaczenie w polu, kółko wokół etapu lub pasa, czarna linia przez wiersz albo kreska przez sygnalizator są od razu wysyłane pod ten adres; odpowiedź pojawia się małym szarym tekstem obok wiersza. Token jest przechowywany w postaci zaszyfrowanej. Pozostaw adres pusty, aby to wyłączyć.</string>
 </resources>

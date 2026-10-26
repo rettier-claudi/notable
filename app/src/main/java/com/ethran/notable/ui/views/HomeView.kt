@@ -245,7 +245,11 @@ fun LibraryContent(
             }
         }
 
-        Column(Modifier.padding(10.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(10.dp)
+        ) {
             Spacer(Modifier.height(10.dp))
             ShowPagesRow(
                 appRepository = appRepository,
@@ -276,19 +280,51 @@ fun LibraryContent(
 
             Spacer(Modifier.height(10.dp))
 
-            NotebookGrid(
-                appRepository = appRepository,
-                exportEngine = exportEngine,
-                syncScheduler = syncScheduler,
-                books = uiState.books,
-                isImporting = uiState.isImporting,
-                syncBadges = uiState.syncBadges,
-                sentNotebookIds = uiState.sentNotebookIds,
-                onNavigateToEditor = onNavigateToEditor,
-                onDeleteEmptyBook = onDeleteEmptyBook,
-                onCreateNewNotebook = onCreateNewNotebook,
-                onPreviewMissing = onPreviewMissing
-            )
+            // The grid takes what is left, so the ticket row below always stays on screen.
+            Column(Modifier.weight(1f)) {
+                NotebookGrid(
+                    appRepository = appRepository,
+                    exportEngine = exportEngine,
+                    syncScheduler = syncScheduler,
+                    books = uiState.books,
+                    isImporting = uiState.isImporting,
+                    syncBadges = uiState.syncBadges,
+                    sentNotebookIds = uiState.sentNotebookIds,
+                    onNavigateToEditor = onNavigateToEditor,
+                    onDeleteEmptyBook = onDeleteEmptyBook,
+                    onCreateNewNotebook = onCreateNewNotebook,
+                    onPreviewMissing = onPreviewMissing
+                )
+            }
+
+            // Fork (claudi.37): the bridge's ticket pages ("kind": "tickets") in a row of their own,
+            // at the very bottom, apart from the ordinary notebooks. Only where there are some —
+            // the bridge keeps them in the Workspace (root).
+            if (uiState.ticketBooks.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(text = stringResource(R.string.home_tickets))
+                Spacer(Modifier.height(10.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .autoEInkAnimationOnScroll()
+                ) {
+                    items(uiState.ticketBooks, key = { "ticket-" + it.id }) { book ->
+                        LibraryNotebookCard(
+                            modifier = Modifier.width(100.dp),
+                            appRepository = appRepository,
+                            exportEngine = exportEngine,
+                            syncScheduler = syncScheduler,
+                            book = book,
+                            syncBadge = uiState.syncBadges[book.id],
+                            sent = book.id in uiState.sentNotebookIds,
+                            onNavigateToEditor = onNavigateToEditor,
+                            onPreviewMissing = onPreviewMissing,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -549,41 +585,69 @@ fun NotebookGrid(
                     }
                     return@items
                 }
-                var isSettingsOpen by remember { mutableStateOf(false) }
-                var isConflictOpen by remember { mutableStateOf(false) }
-                NotebookCard(
-                    bookId = book.id,
-                    title = book.title,
-                    pageIds = book.pageIds,
-                    openPageId = book.openPageId,
+                LibraryNotebookCard(
+                    appRepository = appRepository,
+                    exportEngine = exportEngine,
+                    syncScheduler = syncScheduler,
+                    book = book,
                     syncBadge = syncBadges[book.id],
                     sent = book.id in sentNotebookIds,
-                    // A conflicted notebook opens the resolution dialog on tap — the reachable entry
-                    // point for the CONFLICT badge — instead of the editor.
-                    onOpen = { bookId, pageId ->
-                        if (syncBadges[bookId] == SyncBadge.CONFLICT) isConflictOpen = true
-                        else onNavigateToEditor(pageId, bookId)
-                    },
-                    onOpenSettings = { isSettingsOpen = true },
-                    onPreviewMissing = onPreviewMissing
+                    onNavigateToEditor = onNavigateToEditor,
+                    onPreviewMissing = onPreviewMissing,
                 )
-
-                if (isSettingsOpen) {
-                    NotebookConfigDialog(
-                        appRepository,
-                        exportEngine = exportEngine,
-                        syncScheduler = syncScheduler,
-                        bookId = book.id, onClose = { isSettingsOpen = false })
-                }
-
-                if (isConflictOpen) {
-                    ConflictResolutionDialog(
-                        bookId = book.id,
-                        title = book.title,
-                        onClose = { isConflictOpen = false })
-                }
             }
         }
+    }
+}
+
+/**
+ * A notebook card with its dialogs, as in the *Notebooks* grid and the *Tickets* row: tap opens the
+ * editor (a conflicted notebook opens the resolution dialog instead — the reachable entry point for
+ * the CONFLICT badge), long-press opens the notebook settings.
+ */
+@Composable
+private fun LibraryNotebookCard(
+    modifier: Modifier = Modifier,
+    appRepository: AppRepository,
+    exportEngine: ExportEngine,
+    syncScheduler: SyncScheduler,
+    book: Notebook,
+    syncBadge: SyncBadge?,
+    sent: Boolean,
+    onNavigateToEditor: (String, String) -> Unit,
+    onPreviewMissing: (String) -> Unit,
+) {
+    var isSettingsOpen by remember { mutableStateOf(false) }
+    var isConflictOpen by remember { mutableStateOf(false) }
+    NotebookCard(
+        modifier = modifier,
+        bookId = book.id,
+        title = book.title,
+        pageIds = book.pageIds,
+        openPageId = book.openPageId,
+        syncBadge = syncBadge,
+        sent = sent,
+        onOpen = { bookId, pageId ->
+            if (syncBadge == SyncBadge.CONFLICT) isConflictOpen = true
+            else onNavigateToEditor(pageId, bookId)
+        },
+        onOpenSettings = { isSettingsOpen = true },
+        onPreviewMissing = onPreviewMissing
+    )
+
+    if (isSettingsOpen) {
+        NotebookConfigDialog(
+            appRepository,
+            exportEngine = exportEngine,
+            syncScheduler = syncScheduler,
+            bookId = book.id, onClose = { isSettingsOpen = false })
+    }
+
+    if (isConflictOpen) {
+        ConflictResolutionDialog(
+            bookId = book.id,
+            title = book.title,
+            onClose = { isConflictOpen = false })
     }
 }
 

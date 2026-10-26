@@ -69,6 +69,27 @@ val Notebook.isScratch: Boolean
 fun splitScratchNotebooks(books: List<Notebook>): Pair<List<Notebook>, List<Notebook>> =
     books.partition { it.isScratch && it.pageIds.isNotEmpty() }
 
+/** Manifest `kind` for the bridge's ticket pages (YouTrack KD): the home screen gives them a row of their own. */
+const val NOTEBOOK_KIND_TICKETS = "tickets"
+
+/** True for a notebook the server side marked as a ticket page (`"kind": "tickets"`). */
+val Notebook.isTickets: Boolean
+    get() = kind?.trim()?.equals(NOTEBOOK_KIND_TICKETS, ignoreCase = true) == true
+
+/**
+ * Split a folder's notebooks into the *Tickets* row and the rest: `kind == tickets` with pages goes
+ * to the row, everything else stays (a ticket notebook without pages has no tile and stays in the grid,
+ * where the empty-notebook warning handles it, like [splitScratchNotebooks]).
+ *
+ * The row is ordered by title, descending — stable, because the bridge replaces a ticket page by a new
+ * notebook (new id, new createdAt) on every reprint, so any creation order would shuffle the tiles. For
+ * the three pages it gives 🥇 番付 · 🏯 天守閣 · ⚔️ 稽古場, the order of the spec (Ryū › mission › shuriken).
+ */
+fun splitTicketNotebooks(books: List<Notebook>): Pair<List<Notebook>, List<Notebook>> {
+    val (tickets, rest) = books.partition { it.isTickets && it.pageIds.isNotEmpty() }
+    return tickets.sortedWith(compareByDescending<Notebook> { it.title }.thenBy { it.id }) to rest
+}
+
 // DAO
 @Dao
 interface NotebookDao {

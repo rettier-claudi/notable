@@ -50,4 +50,52 @@ class NotebookKindTest {
         assertTrue(row.isEmpty())
         assertEquals(books, grid)
     }
+
+    // --- Tickets row (claudi.37): the bridge's YouTrack pages, "kind": "tickets" ---
+
+    private fun titled(id: String, title: String, kind: String? = "tickets", pages: List<String> = listOf("p-$id")) =
+        Notebook(id = id, title = title, pageIds = pages, kind = kind)
+
+    @Test
+    fun isTickets_only_for_kind_tickets() {
+        assertTrue(book("a", kind = "tickets").isTickets)
+        assertTrue(book("b", kind = " Tickets ").isTickets)
+        assertFalse(book("c", kind = null).isTickets)
+        assertFalse(book("d", kind = "scratch").isTickets)
+        assertFalse(book("e", kind = "ticket").isTickets)
+        assertFalse(book("f", kind = "tickets").isScratch)
+    }
+
+    @Test
+    fun ticket_split_orders_the_three_pages_as_in_the_spec_whatever_their_age() {
+        // Reprints give a page a new id and a new createdAt: the row must not follow either.
+        val keikoba = titled("k-new", "⚔️ 稽古場")
+        val banzuke = titled("b", "🥇 番付")
+        val tenshukaku = titled("t", "🏯 天守閣")
+        val plain = book("n1")
+        val scratch = book("s1", kind = "scratch")
+
+        val (row, rest) = splitTicketNotebooks(listOf(keikoba, plain, banzuke, scratch, tenshukaku))
+
+        assertEquals(listOf(banzuke, tenshukaku, keikoba), row)
+        assertEquals(listOf(plain, scratch), rest)
+        // the scratch split then sees only the rest
+        assertEquals(listOf(scratch), splitScratchNotebooks(rest).first)
+    }
+
+    @Test
+    fun ticket_split_keeps_an_empty_ticket_notebook_in_the_grid() {
+        val empty = titled("e", "🥇 番付", pages = emptyList())
+        val (row, rest) = splitTicketNotebooks(listOf(empty))
+        assertTrue(row.isEmpty())
+        assertEquals(listOf(empty), rest)
+    }
+
+    @Test
+    fun ticket_split_of_ordinary_folder_changes_nothing() {
+        val books = listOf(book("a"), book("b", kind = "scratch"))
+        val (row, rest) = splitTicketNotebooks(books)
+        assertTrue(row.isEmpty())
+        assertEquals(books, rest)
+    }
 }

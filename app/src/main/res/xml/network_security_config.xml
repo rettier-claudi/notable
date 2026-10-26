@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ticket-Seiten: die Tablet-Brücke spricht im LAN nur http (http://192.0.0.247:8080).
+     Android sperrt Klartext in Apps ab API 28; erlaubt wird er nur für diese eine Adresse. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.0.0.247</domain>
+    </domain-config>
+</network-security-config>

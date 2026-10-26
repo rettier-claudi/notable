@@ -3,6 +3,7 @@ package com.ethran.notable.sync.serializers
 import com.ethran.notable.data.db.NOTEBOOK_KIND_SCRATCH
 import com.ethran.notable.data.db.Notebook
 import com.ethran.notable.data.db.isScratch
+import com.ethran.notable.data.db.isTickets
 import com.ethran.notable.utils.AppResult
 import com.ethran.notable.utils.DomainError
 import org.junit.Assert.assertEquals
@@ -167,6 +168,16 @@ class NotebookSerializerTest {
             .replaceFirst("{", "{\"kind\": \"scratch\",")
         val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
         assertTrue(restored.isScratch)
+    }
+
+    @Test
+    fun manifest_kind_tickets_from_the_bridge_round_trips() {
+        val json = NotebookSerializer.serializeManifest(sampleNotebook())
+            .replaceFirst("{", "{\"kind\": \"tickets\",")
+        val restored = (NotebookSerializer.deserializeManifest(json) as AppResult.Success).data
+        assertTrue(restored.isTickets)
+        assertTrue(!restored.isScratch)
+        assertTrue(NotebookSerializer.serializeManifest(restored).contains("\"kind\": \"tickets\""))
     }
 
     @Test

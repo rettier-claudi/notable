@@ -13,6 +13,7 @@
 
     <application
         android:name=".NotableApp"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="true"
         android:largeHeap="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

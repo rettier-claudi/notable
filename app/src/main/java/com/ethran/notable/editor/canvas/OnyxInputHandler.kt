@@ -457,7 +457,7 @@ class OnyxInputHandler(
                             toolbarState.activePenSetting.color,
                             toolbarState.pen,
                             linePoints
-                        )
+                        )?.let { onTicketStroke(it) }
 
                         coroutineScope.launch(Dispatchers.Default) {
                             val dirtyRect = Rect(
@@ -504,7 +504,7 @@ class OnyxInputHandler(
                                 toolbarState.activePenSetting.color,
                                 toolbarState.pen,
                                 scaledPoints
-                            )
+                            )?.let { onTicketStroke(it) }
                         } else {
                             log.d("Erased by scribble, $erasedByScribbleDirtyRect")
                             // Union the scribble track (firmware screen coords) with the erased
@@ -532,6 +532,16 @@ class OnyxInputHandler(
                     }
                 }
             }
+        }
+    }
+
+    // Fork: ticket pages -- a finished stroke may be a gesture (tick, loop, line, light). Cheap
+    // no-op on every other page; the check itself runs after the pen has rested.
+    private fun onTicketStroke(stroke: com.ethran.notable.data.db.Stroke) {
+        val pageId = page.currentPageId
+        val pageDataManager = page.pageDataManager
+        viewModel.ticketGestures.onStrokeDrawn(pageId, stroke) { ids ->
+            pageDataManager.getStrokes(ids, pageId)
         }
     }
 

@@ -198,6 +198,14 @@ fun drawOnCanvasFromPage(
             pageDrawingLog.e("PageView.kt: ${error.userMessage}", e)
             persistentError = persistentError?.let { it + error } ?: error
         }
+        // Fork: the bridge's answers next to ticket rows -- overlay only, never a stroke.
+        try {
+            com.ethran.notable.tickets.TicketLabels.draw(
+                this, page.currentPageId, pageArea, -page.scroll, page.viewWidth / zoomLevel
+            )
+        } catch (e: Exception) {
+            pageDrawingLog.e("Ticket labels failed: ${e.message}")
+        }
     }
     pageDrawingLog.d(
         "drawOnCanvasFromPage, finished drawing to canvas: ${canvas.hashCode()}"

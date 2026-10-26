@@ -244,7 +244,9 @@ class EditorViewModel @Inject constructor(
     private val appEventBus: com.ethran.notable.data.events.AppEventBus,
     val snackDispatcher: SnackDispatcher,
     private val historyFactory: History.Factory,
-    @param:ApplicationScope private val appScope: CoroutineScope
+    @param:ApplicationScope private val appScope: CoroutineScope,
+    /** Fork: ticket pages (gestures sent to the tablet bridge). */
+    val ticketGestures: com.ethran.notable.tickets.TicketGestureService,
 ) : ViewModel() {
     // ---- Toolbar / UI State (single flat flow) ----
     private val _toolbarState = MutableStateFlow(ToolbarUiState())
@@ -253,6 +255,12 @@ class EditorViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             ClipboardStore.content.collect { setHasClipboard(it != null) }
+        }
+        // Fork: a ticket page's gesture layout is fetched whenever a page is opened.
+        viewModelScope.launch {
+            _toolbarState.map { it.pageId }.distinctUntilChanged().collect { id ->
+                if (!id.isNullOrBlank()) ticketGestures.onPageOpened(id)
+            }
         }
         // Sync state for the toolbar buttons; settings re-read on every state change so a URL
         // entered in settings shows the notify button without reopening the editor.
@@ -294,6 +302,8 @@ class EditorViewModel @Inject constructor(
             appEventBus.events.collect { event ->
                 if (event !is com.ethran.notable.data.events.AppEvent.PageDownloaded) return@collect
                 if (!editorActive || event.pageId != currentPageId) return@collect
+                // Fork: a reprinted ticket page comes with a new layout.
+                ticketGestures.onPageOpened(event.pageId)
                 if (com.ethran.notable.utils.AppResumeClock.millisSinceResume() <= RELOAD_AFTER_RESUME_MS) {
                     // Silent on purpose: the user has not drawn yet, and a snack here would be
                     // one more e-ink repaint for something that needs no decision.

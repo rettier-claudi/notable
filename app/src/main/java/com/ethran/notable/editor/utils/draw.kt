@@ -18,8 +18,8 @@ fun handleDraw(
     color: Int,
     pen: Pen,
     touchPoints: List<StrokePoint>
-) {
-    try {
+): Stroke? {
+    return try {
         val boundingBox = calculateBoundingBox(touchPoints) { Pair(it.x, it.y) }
 
         //move rectangle
@@ -42,7 +42,9 @@ fun handleDraw(
         // this is causing lagging and crushing, neo pens are not good
         page.drawAreaPageCoordinates(strokeBounds(stroke).toRect())
         historyBucket.add(stroke.id)
+        stroke
     } catch (e: Exception) {
         log.e("Handle Draw: An error occurred while handling the drawing: ${e.message}")
+        null
     }
 }

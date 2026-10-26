@@ -13,6 +13,7 @@ import com.ethran.notable.data.db.Folder
 import com.ethran.notable.data.db.Notebook
 import com.ethran.notable.data.db.Page
 import com.ethran.notable.data.db.splitScratchNotebooks
+import com.ethran.notable.data.db.splitTicketNotebooks
 import com.ethran.notable.data.model.BackgroundType
 import com.ethran.notable.io.ExportEngine
 import com.ethran.notable.io.ImportEngine
@@ -59,6 +60,11 @@ data class LibraryUiState(
      * row next to the folder's real scratch notes ([singlePages]); see [splitScratchNotebooks].
      */
     val scratchBooks: List<Notebook> = emptyList(),
+    /**
+     * Notebooks the server side marked `"kind": "tickets"` (the bridge's YouTrack pages), shown in a row
+     * of their own below the grid; see [splitTicketNotebooks].
+     */
+    val ticketBooks: List<Notebook> = emptyList(),
     val singlePages: List<Page> = emptyList(),
     val syncBadges: Map<String, SyncBadge> = emptyMap(),
     val quickPageBadges: Map<String, SyncBadge> = emptyMap(),
@@ -154,7 +160,8 @@ class LibraryViewModel @Inject constructor(
     val uiState: StateFlow<LibraryUiState> = combine(
         _folderId, _isLatestVersion, _isImporting, _dbDataFlow
     ) { folderId, isLatestVersion, isImporting, dbData ->
-        val (scratchBooks, books) = splitScratchNotebooks(dbData.books)
+        val (ticketBooks, rest) = splitTicketNotebooks(dbData.books)
+        val (scratchBooks, books) = splitScratchNotebooks(rest)
         LibraryUiState(
             folderId = folderId,
             isLatestVersion = isLatestVersion,
@@ -162,6 +169,7 @@ class LibraryViewModel @Inject constructor(
             folders = dbData.folders,
             books = books,
             scratchBooks = scratchBooks,
+            ticketBooks = ticketBooks,
             singlePages = dbData.singlePages,
             syncBadges = dbData.syncBadges,
             quickPageBadges = dbData.quickPageBadges,

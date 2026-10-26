@@ -2,6 +2,7 @@
     <string name="app_name" translatable="false">Notable</string>
     <string name="home_quick_pages">Scratch notes</string>
     <string name="home_notebooks">Notebooks</string>
+    <string name="home_tickets">Tickets</string>
     <string name="home_add_new_folder">Add new folder</string>
     <string name="home_new_folder">New Folder</string>
     <string name="home_view_name">Library</string>
@@ -332,4 +333,9 @@
     <string name="gestures_hold_action">Finger Hold Action</string>
     <string name="home_sync_no_password">Sync paused: no password</string>
     <string name="home_sync_password_unreadable">Sync paused: password unreadable</string>
+    <string name="bruecke_url_label">Bridge URL (ticket pages)</string>
+    <string name="bruecke_token_label">Bridge token</string>
+    <string name="bruecke_token_save">Save token</string>
+    <string name="bruecke_token_remove">Remove token</string>
+    <string name="bruecke_hint">Optional. On a ticket page of the tablet bridge, a tick in a box, a loop around a stage or belt, a black line through a row or a stroke through the traffic light is sent to this URL right away; the answer appears small in grey next to the row. The token is stored encrypted. Leave the URL empty to turn this off.</string>
 </resources>

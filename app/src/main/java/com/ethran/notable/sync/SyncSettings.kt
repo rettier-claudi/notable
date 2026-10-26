@@ -42,6 +42,11 @@ data class SyncSettings(
      * started has finished -- used to kick a server-side consumer immediately. Empty = button hidden.
      */
     val syncWebhookUrl: String = "",
+    /**
+     * Fork: base URL of the tablet bridge for ticket pages (`GET /gesten/<pageId>`, `POST /geste`).
+     * Empty = ticket gestures off. The token lives encrypted in its own KV row (BrueckeTokenStore).
+     */
+    val brueckeUrl: String = "",
     /** When opening a notebook, check whether the server has a newer version and hint the user. */
     val checkOnOpen: Boolean = true,
     val wifiOnly: Boolean = false,

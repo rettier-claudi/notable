@@ -990,6 +990,19 @@ class PageDataManager @Inject constructor(
             try {
                 appRepository.strokeRepository.create(strokes)
             } catch (_: SQLiteConstraintException) {
+                // Two different constraints end up here. Fork, 25.10.2026: mostly it was not a
+                // duplicate id but the page itself -- a sync had deleted its notebook (tombstone)
+                // while it was still open, so the foreign key refused every new stroke, and the
+                // update below then changed nothing: the strokes were silently lost.
+                if (appRepository.pageRepository.getById(pageId) == null) {
+                    appEventBus.tryEmit(
+                        AppEvent.LogMessage(
+                            reason = "saveStrokesToPersistLayer",
+                            message = "This page was deleted by a sync -- new strokes are NOT saved. Close it and reopen the notebook."
+                        )
+                    )
+                    return@launchDbWrite
+                }
                 // There were some rare bugs when strokes weren't unique when inserting from history
                 // I'm not sure if it's still a problem, let's just show the message
                 appEventBus.tryEmit(
