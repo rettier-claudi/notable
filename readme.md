@@ -575,7 +575,9 @@ the `upstream` remote and merged in as it moves.
 Build: `./gradlew assembleRelease` with `STORE_FILE`/`STORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`
 set (own keystore; the APK is not installable over the upstream build, uninstall that first —
 notebooks live in `Documents/notabledb` and survive, sync credentials must be re-entered).
-Releases: https://github.com/rettier-claudi/notable/releases
+No GitHub releases any more (all removed 2026-10-26). The signed APK is installed on the tablet
+from the tablet bridge in the home LAN: `http://192.0.0.247:8080/app` (download page, newest
+first; files on mike under `/var/data/user/mike/tablet-bruecke/app/`).
 
 ## About
 This project began as a fork of the original Notable app and has since evolved into a continuation of it. The architecture is largely the same, but many of the functions have been rewritten and expanded with a focus on practical, everyday use. Development is active when possible, guided by the principle that the app must be fast and dependable — performance comes first, and the basics need to feel right before new features are introduced. Waiting for things to load is seen as unacceptable, so responsiveness is a core priority.
